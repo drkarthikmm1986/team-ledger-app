@@ -1,5 +1,5 @@
 /* Team Ledger 4 — app shell: state, router, tab bar, event dispatch. */
-import { $, T, ic, CFG, lang, setLang, ls, native } from './core/util.js';
+import { $, T, ic, CFG, lang, setLang, ls, native, VERSION } from './core/util.js';
 import { createLocalBook } from './data/local-book.js';
 import { toast, closeSheet, sheetOpen, sheetState } from './ui/kit.js';
 import { viewHome, viewAccount, viewReport, ledgerActions, fromSafeId } from './views/ledger.js';
@@ -126,9 +126,19 @@ async function start() {
   if (!local.storageOk) toast(T('இந்த உலாவியில் சேமிப்பு இல்லை. Private mode-ஐ நிறுத்தவும்.', 'Storage is unavailable. Turn off private mode.'));
   checkLock();
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => { });
-  if ('serviceWorker' in navigator && location.protocol === 'https:' && !native.any && !ctx.preview) navigator.serviceWorker.register('sw.js').catch(() => { });
+  if ('serviceWorker' in navigator && location.protocol === 'https:' && !native.any && !ctx.preview) {
+    /* Auto update: a new release is fetched in the background and the app reloads itself once it is safe. */
+    const hadController = !!navigator.serviceWorker.controller; let reloading = false;
+    const safeReload = () => { if (reloading) return; if (sheetOpen() || document.querySelector('.lock') || /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '')) { setTimeout(safeReload, 4000); return; } reloading = true; location.reload(); };
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) safeReload(); });
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      const check = () => reg.update().catch(() => { });
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+      setInterval(check, 30 * 60 * 1000);
+    }).catch(() => { });
+  }
   const u = new URL(location.href); if (u.searchParams.has('code')) { const link = location.href; history.replaceState(null, '', location.pathname + location.hash); handleAuthLink(ctx, link); }
   setTimeout(() => ping(ctx), 2500);
 }
-window.TL = { ctx, render, online, version: '4.1.0' };
+window.TL = { ctx, render, online, version: VERSION };
 start();

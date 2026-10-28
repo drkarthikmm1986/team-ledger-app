@@ -35,6 +35,10 @@ export function viewMore(ctx) {
       ${CFG.shareUrl ? `<button class="row" data-act="share-app"><span class="ic">${ic('share')}</span><span class="tx"><b>${T('நண்பர்களுடன் பகிர்', 'Share with friends')}</b></span></button>` : ''}
       ${CFG.supabaseUrl && !ctx.preview ? `<button class="row" data-act="stats"><span class="ic">${ic('info')}</span><span class="tx"><b>${T('பெயரில்லா பயன்பாட்டு எண்ணிக்கை', 'Anonymous usage count')}</b><small>${T('எத்தனை பேர் பயன்படுத்துகிறார்கள் என்பதை மட்டும் எண்ணும். கணக்கு விவரம் எதுவும் அனுப்பப்படாது.', 'Only counts how many people use the app. None of your records are sent.')}</small></span><span class="end">${stats ? T('இயக்கம்', 'ON') : T('இல்லை', 'OFF')}</span></button>` : ''}
     </div>
+    ${!ctx.preview ? `<div class="section-h"><h2>${T('புதுப்பிப்பு', 'Updates')}</h2></div>
+    <div class="menu">
+      <button class="row" data-act="check-update"><span class="ic green">${ic('refresh')}</span><span class="tx"><b>${T('புதிய பதிப்பு உள்ளதா பார்', 'Check for updates')}</b><small>${T('இப்போது: ', 'Now: ')}${VERSION} · ${T('புதிய பதிப்பு வந்தால் தானாகவே சொல்லும்', 'You are told automatically when a new version arrives')}</small></span></button>
+    </div>` : ''}
     <div class="section-h"><h2>${T('மற்றவை', 'Other')}</h2></div>
     <div class="menu">
       ${ctx.local.demo ? `<button class="row" data-act="clear-demo"><span class="ic amber">${ic('spark')}</span><span class="tx"><b>${T('மாதிரி தரவை நீக்கு', 'Remove demo data')}</b></span></button>` : ''}
@@ -132,6 +136,15 @@ function loadDemo(ctx) {
 }
 
 export const moreActions = {
+  'check-update': async () => {
+    if (window.LedgerUpdates && window.LedgerUpdates.check) { window.LedgerUpdates.check(); return; }
+    try {
+      const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+      if (reg) { await reg.update(); if (reg.installing || reg.waiting) { toast(T('புதிய பதிப்பு ஏற்றுகிறது…', 'Loading the new version…')); return; } }
+      const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); const v = r.ok ? (await r.json()).version : VERSION;
+      toast(v && v !== VERSION ? T('புதிய பதிப்பு ' + v + ' — மீண்டும் திறக்கவும்', 'Version ' + v + ' ready — reopen the app') : T('சமீபத்திய பதிப்பு உள்ளது', 'You have the latest version'));
+    } catch (e) { toast(T('இணையத்துடன் மீண்டும் முயற்சிக்கவும்', 'Try again with internet')); }
+  },
   lang: (ctx, b) => { setLang(b.dataset.v); ctx.render(); },
   theme: (ctx, b) => { ls.set('tl4-theme', b.dataset.v); applyTheme(); ctx.render(); },
   lock: ctx => toggleLock(ctx),
@@ -148,8 +161,8 @@ export const moreActions = {
     try {
       const m = await import('../apk-zip.js'); const bin = Uint8Array.from(atob(m.default), c => c.charCodeAt(0));
       const blob = new Blob([bin], { type: 'application/zip' });
-      if (window.TL_DOWNLOADS) await window.TL_DOWNLOADS.save({ filename: 'Team-Ledger-4.1.0-Android.zip', data: blob });
-      else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'Team-Ledger-4.1.0-Android.zip'; a.click(); }
+      if (window.TL_DOWNLOADS) await window.TL_DOWNLOADS.save({ filename: 'Team-Ledger-' + VERSION + '-Android.zip', data: blob });
+      else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'Team-Ledger-' + VERSION + '-Android.zip'; a.click(); }
     } catch (e) { toast(e && e.code === 'declined' ? T('ரத்து செய்யப்பட்டது', 'Cancelled') : T('பதிவிறக்க முடியவில்லை', 'Could not download')); }
   },
   'share-app': () => shareText(T('Team Ledger — எளிய வரவு செலவு கணக்கு ஆப். இலவசம்: ', 'Team Ledger — simple money book app. Free: ') + CFG.shareUrl),

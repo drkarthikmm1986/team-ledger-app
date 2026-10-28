@@ -11,8 +11,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      max-parallel: 3
       matrix:
-        os: [macos-latest]
+        os: [macos-15, macos-14, macos-26]
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@v6

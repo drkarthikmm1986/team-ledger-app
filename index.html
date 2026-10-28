@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ta">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Team Ledger — எளிய வரவு செலவு கணக்கு</title>
+<meta name="description" content="Team Ledger: பச்சை = பணம் வந்தது, சிவப்பு = பணம் போனது. இலவசம், இணையம் இல்லாமலும் வேலை செய்யும். Android, iPhone, iPad.">
+<meta property="og:title" content="Team Ledger — எளிய வரவு செலவு கணக்கு">
+<meta property="og:description" content="Simple money in / money out book. Free. Works offline.">
+<meta property="og:image" content="https://drkarthikmm1986.github.io/team-ledger-app/app/icon-512.png">
+<link rel="canonical" href="https://drkarthikmm1986.github.io/team-ledger-app/">
+<link rel="icon" href="app/icon.svg" type="image/svg+xml">
+<style>
+:root{--bg:#f3f6f5;--card:#fff;--line:#dce5e2;--text:#0f1c1b;--muted:#5d6f6c;--brand:#0e7c74;--brand2:#12a594;--in:#13914f;--out:#d8344a;--gold:#f5b301;--font:"Inter","Segoe UI",system-ui,-apple-system,"Noto Sans Tamil",Roboto,sans-serif}
+@media (prefers-color-scheme:dark){:root{--bg:#0b1416;--card:#132225;--line:#22383b;--text:#e9f3f1;--muted:#9db3b0;--brand:#2cc7b4;--brand2:#5ee0cf;--in:#3fd68a;--out:#ff6b7f}}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:17px/1.55 var(--font)}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
+nav{display:flex;align-items:center;gap:10px;height:64px}nav img{width:36px;height:36px;border-radius:10px}nav b{font-size:19px;flex:1}
+nav a{color:var(--muted);text-decoration:none;font-weight:650;font-size:15px;margin-left:14px}
+.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:36px;align-items:center;padding:30px 0 40px}
+h1{font-size:clamp(34px,6vw,56px);line-height:1.08;letter-spacing:-.03em;margin:0 0 14px}
+h1 .g{color:var(--in)}h1 .r{color:var(--out)}
+.lead{font-size:19px;color:var(--muted);margin:0 0 24px;max-width:520px}
+.cta{display:flex;gap:12px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:10px;height:58px;padding:0 24px;border-radius:17px;background:var(--brand);color:#fff;text-decoration:none;font-weight:800;font-size:17px;box-shadow:0 10px 26px rgba(14,124,116,.28)}
+@media (prefers-color-scheme:dark){.btn{color:#04211e}}
+.btn.ghost{background:var(--card);color:var(--text);border:1px solid var(--line);box-shadow:none}
+.btn small{display:block;font-weight:600;font-size:12px;opacity:.8;line-height:1}
+.badges{display:flex;gap:16px;margin-top:20px;color:var(--muted);font-size:14.5px;font-weight:650;flex-wrap:wrap}
+.phone{justify-self:center;width:min(320px,80vw);aspect-ratio:9/19.5;border-radius:44px;background:#0b1416;padding:10px;box-shadow:0 30px 80px rgba(0,0,0,.25);border:1px solid #22383b}
+.phone video,.phone img{width:100%;height:100%;object-fit:cover;border-radius:34px;display:block;background:#0b1416}
+section{padding:36px 0}
+h2{font-size:clamp(26px,4vw,36px);letter-spacing:-.02em;margin:0 0 18px}
+.feat{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.f{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px}
+.f i{font-style:normal;font-size:28px}.f b{display:block;font-size:18px;margin:8px 0 4px}.f p{margin:0;color:var(--muted);font-size:15.5px}
+.demo video{width:100%;border-radius:22px;border:1px solid var(--line);background:#0b1416;display:block}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.s{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px}.s h3{margin:0 0 10px;font-size:19px}.s ol{margin:0;padding-left:20px;color:var(--muted)}.s li{margin:6px 0}
+.reviews{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.rv{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px}.rv .st{color:var(--gold);font-size:18px;letter-spacing:2px}.rv p{margin:8px 0}.rv small{color:var(--muted)}
+.avg{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}.avg b{font-size:40px}.avg span{color:var(--muted)}
+.empty{color:var(--muted)}
+footer{padding:30px 0 50px;color:var(--muted);font-size:14px;text-align:center}
+@media (max-width:760px){.hero{grid-template-columns:1fr;text-align:left}.phone{width:min(280px,75vw)}nav a{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav><img src="app/icon.svg" alt=""><b>Team Ledger</b><a href="#demo">டெமோ</a><a href="#install">நிறுவுதல்</a><a href="#reviews">கருத்துகள்</a></nav>
+<div class="hero">
+  <div>
+    <h1>உங்கள் பணக் கணக்கு,<br><span class="g">வரவு</span> · <span class="r">செலவு</span> — அவ்வளவுதான்.</h1>
+    <p class="lead">சின்ன கடை முதல் பெரிய நிறுவனம் வரை. படிக்கத் தெரியாதவரும் பயன்படுத்தலாம்: <b style="color:var(--in)">பச்சை</b> = பணம் வந்தது, <b style="color:var(--out)">சிவப்பு</b> = பணம் போனது. இருப்பு தானாகக் கணக்கிடப்படும்.</p>
+    <div class="cta">
+      <a class="btn" id="dl-android" href="Team-Ledger-4.1.0.apk" download>⬇ <span>Android APK<small>இலவசம் · Free</small></span></a>
+      <a class="btn ghost" id="dl-ios" href="app/">🍎 <span>iPhone / iPad<small>திறந்து Home Screen-ல் சேர்</small></span></a>
+    </div>
+    <div class="badges"><span>✓ இலவசம்</span><span>✓ இணையம் தேவையில்லை</span><span>✓ தமிழ் / English</span><span>✓ PDF · Excel</span></div>
+  </div>
+  <div class="phone"><video src="team-ledger-demo-phone.mp4" autoplay muted loop playsinline poster="poster-phone.jpg"></video></div>
+</div>
+
+<section>
+  <h2>ஏன் Team Ledger?</h2>
+  <div class="feat">
+    <div class="f"><i>🟢🔴</i><b>இரண்டே பட்டன்</b><p>வரவு அல்லது செலவு. தொகையை calculator போல அடித்து சேமி.</p></div>
+    <div class="f"><i>📒</i><b>ஒவ்வொருவருக்கும் கணக்கு</b><p>ஆள், கடை, வேலை — தனித்தனி கணக்கு, தனித்தனி இருப்பு.</p></div>
+    <div class="f"><i>📊</i><b>அறிக்கை & PDF</b><p>இன்று, வாரம், மாதம், வருடம். PDF, Excel ஒரு தொடுதலில்.</p></div>
+    <div class="f"><i>💹</i><b>லாபம் / கமிஷன் %</b><p>வியாபாரத்துக்கு: % போட்டால் லாபம் தானாக வரும்.</p></div>
+    <div class="f"><i>👥</i><b>குழுக் கணக்கு</b><p>10 பேர் வரை ஒரே கணக்கு. Admin, Editor, Viewer அனுமதி. End-to-end பூட்டு.</p></div>
+    <div class="f"><i>💳</i><b>கணக்கு விவரங்கள்</b><p>வங்கி, UPI, ATM அட்டை, PAN, ஆதார், ஆவணங்கள் — AES-256 பூட்டுடன்.</p></div>
+    <div class="f"><i>🔒</i><b>பாதுகாப்பு</b><p>PIN பூட்டு. உங்கள் கணக்கு உங்கள் போனில் மட்டும்.</p></div>
+    <div class="f"><i>💾</i><b>Backup</b><p>ஒரு தொடுதலில் Backup. பழைய Team Ledger Backup-உம் ஏற்கும்.</p></div>
+  </div>
+</section>
+
+<section class="demo" id="demo">
+  <h2>டெமோ வீடியோ</h2>
+  <video src="team-ledger-demo.mp4" controls playsinline preload="metadata" poster="poster.jpg"></video>
+</section>
+
+<section id="install">
+  <h2>எப்படி நிறுவுவது</h2>
+  <div class="steps">
+    <div class="s"><h3>🤖 Android</h3><ol><li>மேலே <b>Android APK</b> அழுத்துங்கள்.</li><li>Download முடிந்ததும் கோப்பைத் திறக்கவும்.</li><li>“Install” அழுத்துங்கள். (முதல் முறை “இந்த மூலத்தை அனுமதி” கேட்கும்.)</li></ol></div>
+    <div class="s"><h3>🍎 iPhone / iPad</h3><ol><li><b>Safari</b>-ல் <b>iPhone / iPad</b> பட்டனை அழுத்துங்கள்.</li><li>கீழே உள்ள <b>Share ⬆</b> பட்டனை அழுத்துங்கள்.</li><li><b>“Add to Home Screen”</b> → Add. இனி ஆப் போலவே திறக்கும்.</li></ol></div>
+    <div class="s"><h3>📦 பழைய ஆப்பிலிருந்து</h3><ol><li>பழைய ஆப் → மேலும் → <b>காப்புப் பிரதி</b> சேமி.</li><li>புதிய ஆப் → மேலும் → <b>Backup-ஐ ஏற்று</b>.</li><li>எல்லா கணக்கும் வந்துவிடும். பழைய ஆப்பை அழிக்க வேண்டாம்.</li></ol></div>
+  </div>
+</section>
+
+<section id="reviews">
+  <h2>பயனர் கருத்துகள்</h2>
+  <div id="rv"><p class="empty">ஏற்றுகிறது…</p></div>
+</section>
+
+<footer>Team Ledger 4.1 · உங்கள் கணக்கு உங்கள் போனில் மட்டும் சேமிக்கப்படுகிறது · Your records stay on your device</footer>
+</div>
+<script>
+(function(){
+  const URL_='https://mvgzthdiydlhwxpzqnlq.supabase.co', KEY='sb_publishable_FxRTDOsi99f8eigIGNEICA_yq7DED9N';
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const log=(platform)=>{try{fetch(URL_+'/rest/v1/tl_downloads',{method:'POST',keepalive:true,headers:{apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify({platform,source:(document.referrer?new URL(document.referrer).hostname:'direct').slice(0,40)})}).catch(()=>{});}catch(e){}};
+  document.getElementById('dl-android').addEventListener('click',()=>log('android-apk'));
+  document.getElementById('dl-ios').addEventListener('click',()=>log('ios-web'));
+  const box=document.getElementById('rv');
+  fetch(URL_+'/rest/v1/tl_reviews?select=stars,text,name,created_at&hidden=eq.false&order=created_at.desc&limit=60',{headers:{apikey:KEY,Authorization:'Bearer '+KEY}})
+    .then(r=>r.ok?r.json():[]).then(list=>{
+      if(!list.length){box.innerHTML='<p class="empty">இன்னும் கருத்து இல்லை. ஆப்பில் <b>மேலும் → மதிப்பீடு & கருத்து</b> மூலம் முதல் கருத்தை எழுதுங்கள்!</p>';return;}
+      const avg=(list.reduce((n,r)=>n+r.stars,0)/list.length).toFixed(1);
+      const withText=list.filter(r=>r.text).slice(0,12);
+      box.innerHTML=`<div class="avg"><b>${avg} ★</b><span>${list.length} மதிப்பீடுகள் · ratings</span></div><div class="reviews">${withText.map(r=>`<div class="rv"><span class="st">${'★'.repeat(r.stars)}${'☆'.repeat(5-r.stars)}</span><p>${esc(r.text)}</p><small>${esc(r.name||'Team Ledger பயனர்')} · ${new Date(r.created_at).toLocaleDateString('en-IN')}</small></div>`).join('')}</div>`;
+    }).catch(()=>{box.innerHTML='<p class="empty">இன்னும் கருத்து இல்லை.</p>';});
+})();
+</script>
+</body>
+</html>

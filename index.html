@@ -98,7 +98,7 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:14px;text-align:center}
 </div>
 <script>
 (function(){
-  const URL_='https://mvgzthdiydlhwxpzqnlq.supabase.co', KEY='sb_publishable_FxRTDOsi99f8eigIGNEICA_yq7DED9N';
+  const URL_='https://lqaeeninvmcooxdszlny.supabase.co', KEY='sb_publishable_q4mpCgLWSjfN-36mjXnLDA_D_lKK6PP';
   const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const log=(platform)=>{try{fetch(URL_+'/rest/v1/tl_downloads',{method:'POST',keepalive:true,headers:{apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify({platform,source:(document.referrer?new URL(document.referrer).hostname:'direct').slice(0,40)})}).catch(()=>{});}catch(e){}};
   document.getElementById('dl-android').addEventListener('click',()=>log('android-apk'));

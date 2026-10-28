@@ -151,13 +151,14 @@ async function openGroup(ctx, gid, fromRoute) {
 export function viewTeam(ctx, book) {
   const c = online.groups.current, admin = c.role === 'admin', owner = c.row.owner_id === c.userId;
   if (!online.team) { loadTeam(ctx); }
-  const t = online.team || {};
+  const t = online.team || {}, me = online.user ? (online.user.email || online.user.phone || '') : '';
   return `<div class="topbar"><button class="icon-btn" data-go="g-${esc(c.row.id)}" aria-label="back">${ic('back')}</button><h1>${esc(c.row.name)}<span class="sub line-blue">${T('குழு அமைப்புகள்', 'Team settings')} · ${esc(roleName(c.role))}</span></h1><button class="icon-btn" data-act="team-refresh" aria-label="refresh">${ic('refresh')}</button></div>
     <div class="row2"><button class="btn ghost sm" data-go="g-${esc(c.row.id)}-details">${ic('card', 18)}${T('கணக்கு விவரங்கள்', 'Account Details')}</button><button class="btn ghost sm" data-go="g-${esc(c.row.id)}-report">${ic('chart', 18)}${T('அறிக்கை', 'Report')}</button></div>
+    ${!admin ? `<div class="section-h"><h2>${ic('users', 18)} ${T('உறுப்பினர்கள்', 'Members')}</h2></div><div class="menu"><div class="row">${avatar(me || '?')}<span class="tx"><b>${esc(me || '—')} · ${T('நீங்கள்', 'you')}</b><small>${esc(roleName(c.role))} · ${T('முழு பட்டியலை நிர்வாகி மட்டும் பார்க்கலாம்', 'Only admins see the full list')}</small></span></div></div>` : `
     <div class="section-h"><h2>${ic('users', 18)} ${T('உறுப்பினர்கள்', 'Members')} <span class="muted">· ${t.people ? t.people.length : '…'}/10</span></h2>${admin ? `<button class="link-btn blue-t" data-act="team-invite">${ic('plus', 18, 2.6)}${T('அழை', 'Invite')}</button>` : ''}</div>
     <div class="menu">${(t.people || []).map(m => `<div class="row">${avatar(m.label || '?')}<span class="tx"><b>${esc(m.label || '—')}${m.user_id === c.userId ? ' · ' + T('நீங்கள்', 'you') : ''}</b><small>${esc(roleName(m.role))}${m.user_id === c.row.owner_id ? ' · ' + T('உரிமையாளர்', 'owner') : ''}</small></span>
       ${admin && m.user_id !== c.row.owner_id ? `<button class="mini" data-act="team-role" data-id="${esc(m.user_id)}" data-role="${esc(m.role)}" aria-label="${T('அனுமதி', 'Access')}">${ic('key', 18)}</button>` : ''}
-      ${admin && m.user_id !== c.row.owner_id && m.user_id !== c.userId ? `<button class="mini red-t" data-act="team-remove" data-id="${esc(m.user_id)}" data-name="${esc(m.label)}" aria-label="${T('நீக்கு', 'Remove')}">${ic('x', 18)}</button>` : ''}</div>`).join('') || `<p class="muted pad16">${t.error ? esc(t.error) : T('திறக்கிறது…', 'Loading…')}</p>`}</div>
+      ${admin && m.user_id !== c.row.owner_id && m.user_id !== c.userId ? `<button class="mini red-t" data-act="team-remove" data-id="${esc(m.user_id)}" data-name="${esc(m.label)}" aria-label="${T('நீக்கு', 'Remove')}">${ic('x', 18)}</button>` : ''}</div>`).join('') || `<p class="muted pad16">${t.error ? esc(t.error) : T('திறக்கிறது…', 'Loading…')}</p>`}</div>`}
     ${admin ? `<div class="section-h"><h2>${ic('mail', 18)} ${T('அழைப்புகள்', 'Invitations')}</h2></div><div class="menu">${(t.requests || []).map(r => `<div class="row"><span class="ic blue">${ic('mail')}</span><span class="tx"><b>${esc(r.email)}</b><small>${r.approved ? T('ஒப்புதல் அளிக்கப்பட்டது', 'Approved') : r.public_key ? T('ஒப்புதல் தேவை', 'Ready to approve') : T('உறுப்பினருக்காகக் காத்திருக்கிறது', 'Waiting for member')}</small></span>
       ${r.public_key && !r.approved ? `<button class="btn sm blue-bg" data-act="team-approve" data-id="${esc(r.id)}">${T('ஒப்புதல்', 'Approve')}</button>` : ''}${!r.approved ? `<button class="mini" data-act="team-cancel" data-id="${esc(r.id)}" data-email="${esc(r.email)}" aria-label="cancel">${ic('x', 18)}</button>` : ''}</div>`).join('') || `<p class="muted pad16">${t.requestsError ? esc(t.requestsError) : T('நிலுவையில் அழைப்புகள் இல்லை', 'No pending invitations')}</p>`}</div>` : ''}
     <div class="section-h"><h2>${ic('chat', 18)} ${T('கருத்துகள்', 'Comments')}</h2>${c.role !== 'viewer' ? `<button class="link-btn blue-t" data-act="team-comment">${ic('plus', 18, 2.6)}${T('எழுது', 'Write')}</button>` : ''}</div>
@@ -173,7 +174,8 @@ export function viewTeam(ctx, book) {
 async function loadTeam(ctx) {
   online.team = { loading: true };
   const c = online.groups.current, t = {};
-  try { const { data, error } = await client().rpc('tl2_people', { p_group: c.row.id }); if (error) throw error; t.people = data || []; } catch (e) { t.error = onlineError(e); t.people = []; }
+  t.people = [];
+  if (c.role === 'admin') { try { const { data, error } = await client().rpc('tl2_people', { p_group: c.row.id }); if (error) throw error; t.people = data || []; } catch (e) { t.error = onlineError(e); } }
   if (c.role === 'admin') { try { t.requests = await online.groups.pending(); } catch (e) { t.requests = []; t.requestsError = onlineError(e); } }
   try { t.comments = await online.groups.comments(); } catch (e) { t.comments = []; }
   online.team = t; ctx.render();

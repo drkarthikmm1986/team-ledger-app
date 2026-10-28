@@ -1,0 +1,18 @@
+{
+  "name": "Team Ledger",
+  "short_name": "Team Ledger",
+  "description": "எளிய வரவு செலவு கணக்கு · Simple money in / money out book",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1416",
+  "theme_color": "#0b5e59",
+  "lang": "ta",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+    {"src": "icon.svg", "sizes": "any", "type": "image/svg+xml"}
+  ]
+}

@@ -1,0 +1,44 @@
+name: iOS Safari test
+on:
+  push:
+    branches: [ios-test]
+    paths: [audit/ios.mjs, audit/www/**, .github/workflows/ios.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ios-safari:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest]
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - name: install appium
+        run: |
+          npm install -g appium@2 --no-audit --no-fund
+          appium driver install xcuitest
+          cd audit && npm install --no-audit --no-fund webdriverio@9
+      - name: pick simulator
+        run: |
+          line=$(xcrun simctl list devices available | grep -E "^ +iPhone 1[5-7]( Pro)? \(" | head -1)
+          name=$(echo "$line" | sed -E 's/^ +//; s/ \(.*//')
+          udid=$(echo "$line" | grep -oE "[0-9A-F-]{36}")
+          ver=$(xcrun simctl list devices available | awk -v u="$udid" '/^-- iOS/{v=$3} $0 ~ u {print v; exit}')
+          echo "DEVICE=$name" >> $GITHUB_ENV; echo "IOSVER=$ver" >> $GITHUB_ENV
+          echo "::notice title=simulator::$name iOS $ver"
+          xcrun simctl boot "$udid" || true
+          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
+      - name: run
+        working-directory: audit
+        run: |
+          (cd www && python3 -m http.server 8093 >/dev/null 2>&1 &)
+          (appium --log appium.log --log-level warn &)
+          (cd old && python3 -m http.server 8094 >/dev/null 2>&1 &)
+          sleep 8
+          BASE=http://localhost:8094/ node ios.mjs || true
+          node ios.mjs

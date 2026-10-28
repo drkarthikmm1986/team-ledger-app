@@ -1,0 +1,529 @@
+<!doctype html><html lang="ta"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Server Setup</title><style>
+:root{color-scheme:light dark}body{margin:0;font:17px/1.5 system-ui,sans-serif;background:#0b1624;color:#eef6ff;padding:16px}
+h1{font-size:22px;margin:8px 0 4px}p{margin:6px 0 14px;color:#b9cde0}
+button{width:100%;font-size:20px;font-weight:700;padding:18px;border:0;border-radius:16px;background:#1f9d55;color:#fff;margin:8px 0}
+a.btn{display:block;text-align:center;font-size:19px;font-weight:700;padding:16px;border-radius:16px;background:#2563eb;color:#fff;text-decoration:none;margin:8px 0}
+textarea{width:100%;box-sizing:border-box;height:160px;font:12px monospace;border-radius:12px;background:#08101a;color:#9fd0ff;border:1px solid #234}
+#ok{display:none;color:#4ade80;font-weight:700;text-align:center;font-size:19px}</style></head><body>
+<h1>Team Ledger — Server Setup</h1>
+<p>1) கீழே உள்ள பச்சை பட்டனை அழுத்துங்கள். 2) நீல பட்டனை அழுத்தி Supabase-ல் Paste செய்து Run.</p>
+<button id="c">📋 1. COPY — நகலெடு</button><div id="ok">✅ நகலெடுக்கப்பட்டது! இப்போது நீல பட்டன்</div>
+<a class="btn" href="https://supabase.com/dashboard/project/lqaeeninvmcooxdszlny/sql/new" target="_blank" rel="noopener">2. Supabase SQL Editor திற →</a>
+<textarea id="t" readonly>-- Team Ledger 4 — Supabase server setup (ஒரே தடவை Run செய்யவும்)
+-- Project: lqaeeninvmcooxdszlny
+
+-- ===== Activate-Group-App =====
+-- Separate group edition. Does not change the personal ledger or tl_* foundation.
+
+create schema if not exists tl2_private;
+revoke all on schema tl2_private from public,anon;
+grant usage on schema tl2_private to authenticated;
+create table if not exists public.tl2_groups (
+ id uuid primary key, name text not null check(length(btrim(name)) between 1 and 80),
+ owner_id uuid not null references auth.users(id), revision integer not null default 1 check(revision&gt;0),
+ epoch integer not null default 1 check(epoch&gt;0), envelope text not null check(octet_length(envelope) between 16 and 50331648),
+ updated_at timestamptz not null default now()
+);
+create table if not exists public.tl2_members (
+ group_id uuid references public.tl2_groups(id) not null,user_id uuid references auth.users(id) not null,
+ role text not null check(role in(&#x27;admin&#x27;,&#x27;editor&#x27;,&#x27;commenter&#x27;,&#x27;viewer&#x27;)),primary key(group_id,user_id)
+);
+create index if not exists tl2_member_user on public.tl2_members(user_id,group_id);
+create table if not exists public.tl2_invites (
+ id uuid primary key default gen_random_uuid(),group_id uuid not null references public.tl2_groups(id),
+ email text not null,role text not null check(role in(&#x27;admin&#x27;,&#x27;editor&#x27;,&#x27;commenter&#x27;,&#x27;viewer&#x27;)),
+ token_hash text not null unique,epoch integer not null,expires_at timestamptz not null,
+ unique(group_id,email)
+);
+create table if not exists public.tl2_comments (
+ id uuid primary key,group_id uuid not null references public.tl2_groups(id),author_id uuid not null references auth.users(id),
+ revision integer not null check(revision&gt;0),envelope text not null check(octet_length(envelope) between 16 and 16384)
+);
+create index if not exists tl2_comment_group on public.tl2_comments(group_id);
+create table if not exists public.tl2_audit (
+ id bigint generated always as identity primary key,group_id uuid not null references public.tl2_groups(id),
+ actor_id uuid not null references auth.users(id),action text not null,created_at timestamptz not null default now()
+);
+alter table public.tl2_groups enable row level security;
+alter table public.tl2_members enable row level security;
+alter table public.tl2_invites enable row level security;
+alter table public.tl2_comments enable row level security;
+alter table public.tl2_audit enable row level security;
+revoke all on public.tl2_groups,public.tl2_members,public.tl2_invites,public.tl2_comments,public.tl2_audit from public,anon,authenticated;
+revoke all on sequence public.tl2_audit_id_seq from public,anon,authenticated;
+grant select on public.tl2_groups,public.tl2_members,public.tl2_comments,public.tl2_audit to authenticated;
+create or replace function tl2_private.role_for(g uuid) returns text language sql stable security definer set search_path=&#x27;&#x27; as $$
+ select role from public.tl2_members where group_id=g and user_id=auth.uid()
+$$;
+revoke all on function tl2_private.role_for(uuid) from public,anon,authenticated;
+grant execute on function tl2_private.role_for(uuid) to authenticated;
+drop policy if exists tl2_read on public.tl2_groups;
+create policy tl2_read on public.tl2_groups for select to authenticated using(tl2_private.role_for(id) is not null);
+drop policy if exists tl2_read on public.tl2_members;
+create policy tl2_read on public.tl2_members for select to authenticated using(tl2_private.role_for(group_id) is not null);
+drop policy if exists tl2_read on public.tl2_comments;
+create policy tl2_read on public.tl2_comments for select to authenticated using(tl2_private.role_for(group_id) is not null);
+drop policy if exists tl2_read on public.tl2_audit;
+create policy tl2_read on public.tl2_audit for select to authenticated using(tl2_private.role_for(group_id)=&#x27;admin&#x27;);
+
+create or replace function public.tl2_create(p_id uuid,p_name text,p_envelope text) returns void language plpgsql security definer set search_path=&#x27;&#x27; as $$
+begin
+ perform 1 from auth.users where id=auth.uid() and email_confirmed_at is not null for update;
+ if not found then raise exception &#x27;Verified sign in required&#x27; using errcode=&#x27;42501&#x27;; end if;
+ if (select count(*) from public.tl2_groups where owner_id=auth.uid())&gt;=3 then raise exception &#x27;Maximum three groups&#x27;; end if;
+ insert into public.tl2_groups(id,name,owner_id,envelope) values(p_id,btrim(p_name),auth.uid(),p_envelope);
+ insert into public.tl2_members values(p_id,auth.uid(),&#x27;admin&#x27;);
+ insert into public.tl2_audit(group_id,actor_id,action) values(p_id,auth.uid(),&#x27;created&#x27;);
+end $$;
+
+create or replace function public.tl2_save(p_group uuid,p_expected integer,p_epoch integer,p_envelope text) returns integer language plpgsql security definer set search_path=&#x27;&#x27; as $$
+declare g public.tl2_groups%rowtype;
+begin
+ select * into g from public.tl2_groups where id=p_group for update;
+ if tl2_private.role_for(p_group) is null or tl2_private.role_for(p_group) not in(&#x27;admin&#x27;,&#x27;editor&#x27;) then raise exception &#x27;Write not allowed&#x27; using errcode=&#x27;42501&#x27;; end if;
+ if p_expected is distinct from g.revision or p_epoch is distinct from g.epoch then raise exception &#x27;Refresh required&#x27; using errcode=&#x27;40001&#x27;; end if;
+ update public.tl2_groups set envelope=p_envelope,revision=revision+1,updated_at=clock_timestamp() where id=p_group;
+ insert into public.tl2_audit(group_id,actor_id,action) values(p_group,auth.uid(),&#x27;ledger_saved&#x27;);
+ return g.revision+1;
+end $$;
+
+create or replace function public.tl2_invite(p_group uuid,p_email text,p_role text,p_token text) returns void language plpgsql security definer set search_path=&#x27;&#x27; as $$
+declare g public.tl2_groups%rowtype;e text:=lower(btrim(p_email));
+begin
+ select * into g from public.tl2_groups where id=p_group for update;
+ if tl2_private.role_for(p_group) is distinct from &#x27;admin&#x27; then raise exception &#x27;Admin required&#x27; using errcode=&#x27;42501&#x27;; end if;
+ if p_role is null or p_role not in(&#x27;admin&#x27;,&#x27;editor&#x27;,&#x27;commenter&#x27;,&#x27;viewer&#x27;) or e is null or length(e)&gt;254 or e !~ &#x27;^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$&#x27; or p_token is null or p_token !~ &#x27;^[0-9a-f]{64}$&#x27; then raise exception &#x27;Invalid invite&#x27;; end if;
+ delete from public.tl2_invites where group_id=p_group and expires_at&lt;now();
+ if exists(select 1 from public.tl2_members m join auth.users u on u.id=m.user_id where m.group_id=p_group and lower(u.email)=e) then raise exception &#x27;Already a member&#x27;; end if;
+ if not exists(select 1 from public.tl2_invites where group_id=p_group and email=e) and
+ (select count(*) from public.tl2_members where group_id=p_group)+(select count(*) from public.tl2_invites where group_id=p_group)&gt;=10 then raise exception &#x27;Maximum 10 people including pending invites&#x27;; end if;
+ insert into public.tl2_invites(group_id,email,role,token_hash,epoch,expires_at) values(p_group,e,p_role,encode(sha256(convert_to(p_token,&#x27;UTF8&#x27;)),&#x27;hex&#x27;),g.epoch,now()+interval &#x27;24 hours&#x27;)
+ on conflict(group_id,email) do update set role=excluded.role,token_hash=excluded.token_hash,epoch=excluded.epoch,expires_at=excluded.expires_at;
+ insert into public.tl2_audit(group_id,actor_id,action) values(p_group,auth.uid(),&#x27;invite_created&#x27;);
+end $$;
+
+create or replace function public.tl2_accept(p_group uuid,p_token text) returns void language plpgsql security definer set search_path=&#x27;&#x27; as $$
+declare g public.tl2_groups%rowtype;i public.tl2_invites%rowtype;e text;
+begin
+ select * into g from public.tl2_groups where id=p_group for update;
+ select lower(email) into e from auth.users where id=auth.uid() and email_confirmed_at is not null;
+ if e is null then raise exception &#x27;Verified sign in required&#x27; using errcode=&#x27;42501&#x27;; end if;
+ select * into i from public.tl2_invites where group_id=p_group and token_hash=encode(sha256(convert_to(p_token,&#x27;UTF8&#x27;)),&#x27;hex&#x27;) for update;
+ if not found or i.email&lt;&gt;e or i.expires_at&lt;now() or i.epoch&lt;&gt;g.epoch then raise exception &#x27;Invite invalid or expired&#x27; using errcode=&#x27;42501&#x27;; end if;
+ if (select count(*) from public.tl2_members where group_id=p_group)&gt;=10 then raise exception &#x27;Group is full&#x27;; end if;
+ insert into public.tl2_members values(p_group,auth.uid(),i.role);
+ delete from public.tl2_invites where id=i.id;
+ insert into public.tl2_audit(group_id,actor_id,action) values(p_group,auth.uid(),&#x27;invite_accepted&#x27;);
+end $$;
+
+create or replace function public.tl2_role(p_group uuid,p_user uuid,p_role text) returns void language plpgsql security definer set search_path=&#x27;&#x27; as $$
+declare owner_user uuid;
+begin
+ select owner_id into owner_user from public.tl2_groups where id=p_group for update;
+ if tl2_private.role_for(p_group) is distinct from &#x27;admin&#x27; then raise exception &#x27;Admin required&#x27; using errcode=&#x27;42501&#x27;; end if;
+ if p_user=owner_user then raise exception &#x27;Owner remains admin&#x27;; end if;
+ if p_role is null or p_role not in(&#x27;admin&#x27;,&#x27;editor&#x27;,&#x27;commenter&#x27;,&#x27;viewer&#x27;) then raise exception &#x27;Invalid role&#x27;; end if;
+ update public.tl2_members set role=p_role where group_id=p_group and user_id=p_user;
+ if not found then raise exception &#x27;Member not found&#x27;; end if;
+ insert into public.tl2_audit(group_id,actor_id,action) values(p_group,auth.uid(),&#x27;role_changed&#x27;);
+end $$;
+
+create or replace function public.tl2_comment(p_group uuid,p_id uuid,p_expected integer,p_epoch integer,p_envelope text) returns integer language plpgsql security definer set search_path=&#x27;&#x27; as $$
+declare g public.tl2_groups%rowtype;c public.tl2_comments%rowtype;r text;
+begin
+ select * into g from public.tl2_groups where id=p_group for update;
+ r:=tl2_private.role_for(p_group);
+ if r is null or r=&#x27;viewer&#x27; then raise exception &#x27;Comment not allowed&#x27; using errcode=&#x27;42501&#x27;; end if;
+ if p_epoch is distinct from g.epoch then raise exception &#x27;Refresh required&#x27; using errcode=&#x27;40001&#x27;; end if;
+ select * into c from public.tl2_comments where id=p_id for update;
+ if found then
+  if c.group_id&lt;&gt;p_group or c.author_id&lt;&gt;auth.uid() then raise exception &#x27;Only your own comments&#x27; using errcode=&#x27;42501&#x27;; end if;
+  if p_expected is distinct from c.revision then raise exception &#x27;Refresh required&#x27; using errcode=&#x27;40001&#x27;; end if;
+  update public.tl2_comments set envelope=p_envelope,revision=revision+1 where id=p_id;
+  return c.revision+1;
+ else
+  if p_expected is distinct from 0 then raise exception &#x27;Refresh required&#x27; using errcode=&#x27;40001&#x27;; end if;
+  if (select count(*) from public.tl2_comments where group_id=p_group)&gt;=500 then raise exception &#x27;Comment limit reached&#x27;; end if;
+  insert into public.tl2_comments values(p_id,p_group,auth.uid(),1,p_envelope);
+  return 1;
+ end if;
+end $$;
+
+-- Removal rotates the whole ledger and every comment in one transaction.
+-- Existing clients with the old key cannot write to the new epoch.
+create or replace function public.tl2_rotate(p_group uuid,p_expected integer,p_epoch integer,p_envelope text,p_comments jsonb,p_remove uuid) returns integer language plpgsql security definer set search_path=&#x27;&#x27; as $$
+declare g public.tl2_groups%rowtype;c public.tl2_comments%rowtype;x jsonb;
+begin
+ select * into g from public.tl2_groups where id=p_group for update;
+ if tl2_private.role_for(p_group) is distinct from &#x27;admin&#x27; then raise exception &#x27;Admin required&#x27; using errcode=&#x27;42501&#x27;; end if;
+ if p_expected is distinct from g.revision or p_epoch is distinct from g.epoch then raise exception &#x27;Refresh required&#x27; using errcode=&#x27;40001&#x27;; end if;
+ if p_remove=g.owner_id or p_remove=auth.uid() then raise exception &#x27;Cannot remove owner or yourself&#x27;; end if;
+ if p_remove is null or not exists(select 1 from public.tl2_members where group_id=p_group and user_id=p_remove) then raise exception &#x27;Member not found&#x27;; end if;
+ if p_comments is null or jsonb_typeof(p_comments)&lt;&gt;&#x27;array&#x27; then raise exception &#x27;Invalid comments&#x27;; end if;
+ if jsonb_array_length(p_comments)&lt;&gt;(select count(*) from public.tl2_comments where group_id=p_group) then raise exception &#x27;Refresh comments&#x27; using errcode=&#x27;40001&#x27;; end if;
+ for c in select * from public.tl2_comments where group_id=p_group loop
+  if (select count(*) from jsonb_array_elements(p_comments) a where a-&gt;&gt;&#x27;id&#x27;=c.id::text)&lt;&gt;1 then raise exception &#x27;Invalid comment set&#x27;; end if;
+  select a into x from jsonb_array_elements(p_comments) a where a-&gt;&gt;&#x27;id&#x27;=c.id::text;
+  if (x-&gt;&gt;&#x27;expected&#x27;)::integer is distinct from c.revision then raise exception &#x27;Refresh comments&#x27; using errcode=&#x27;40001&#x27;; end if;
+  update public.tl2_comments set envelope=x-&gt;&gt;&#x27;envelope&#x27;,revision=revision+1 where id=c.id;
+ end loop;
+ update public.tl2_groups set envelope=p_envelope,revision=revision+1,epoch=epoch+1,updated_at=clock_timestamp() where id=p_group;
+ delete from public.tl2_members where group_id=p_group and user_id=p_remove;
+ delete from public.tl2_invites where group_id=p_group;
+ insert into public.tl2_audit(group_id,actor_id,action) values(p_group,auth.uid(),&#x27;member_removed_keys_rotated&#x27;);
+ return g.epoch+1;
+end $$;
+
+create or replace function public.tl2_people(p_group uuid) returns table(user_id uuid,role text,label text) language plpgsql security definer set search_path=&#x27;&#x27; as $$
+begin
+ if tl2_private.role_for(p_group) is distinct from &#x27;admin&#x27; then raise exception &#x27;Admin required&#x27; using errcode=&#x27;42501&#x27;; end if;
+ return query select m.user_id,m.role,u.email::text from public.tl2_members m join auth.users u on u.id=m.user_id where m.group_id=p_group;
+end $$;
+revoke all on function public.tl2_people(uuid) from public,anon,authenticated;
+grant execute on function public.tl2_people(uuid) to authenticated;
+revoke all on function public.tl2_create(uuid,text,text),public.tl2_save(uuid,integer,integer,text),public.tl2_invite(uuid,text,text,text),public.tl2_accept(uuid,text),public.tl2_role(uuid,uuid,text),public.tl2_comment(uuid,uuid,integer,integer,text),public.tl2_rotate(uuid,integer,integer,text,jsonb,uuid) from public,anon,authenticated;
+grant execute on function public.tl2_create(uuid,text,text),public.tl2_save(uuid,integer,integer,text),public.tl2_invite(uuid,text,text,text),public.tl2_accept(uuid,text),public.tl2_role(uuid,uuid,text),public.tl2_comment(uuid,uuid,integer,integer,text),public.tl2_rotate(uuid,integer,integer,text,jsonb,uuid) to authenticated;
+
+
+
+-- ===== Short-Invite-Upgrade =====
+-- Run once after Activate-Group-App.sql. No existing ledger data is removed.
+
+create table if not exists public.tl3_joins(
+ id uuid primary key default gen_random_uuid(),group_id uuid not null references public.tl2_groups(id),
+ email text not null,role text not null check(role in(&#x27;admin&#x27;,&#x27;editor&#x27;,&#x27;commenter&#x27;,&#x27;viewer&#x27;)),
+ code_hash text not null unique,epoch integer not null,expires_at timestamptz not null,
+ request_user uuid references auth.users(id),public_key text,bundle text,
+ unique(group_id,email)
+);
+create table if not exists tl2_private.join_attempts(user_id uuid primary key references auth.users(id),started timestamptz not null,n integer not null);
+alter table public.tl3_joins enable row level security;
+alter table tl2_private.join_attempts enable row level security;
+revoke all on public.tl3_joins,tl2_private.join_attempts from public,anon,authenticated;
+create or replace function public.tl3_invite(p_group uuid,p_email text,p_role text,p_code text) returns void language plpgsql security definer set search_path=&#x27;&#x27; as $$
+declare g public.tl2_groups%rowtype;e text:=lower(btrim(p_email));
+begin
+ select * into g from public.tl2_groups where id=p_group for update;
+ if tl2_private.role_for(p_group) is distinct from &#x27;admin&#x27; then raise exception &#x27;Admin required&#x27; using errcode=&#x27;42501&#x27;;end if;
+ if p_role is null or p_role not in(&#x27;admin&#x27;,&#x27;editor&#x27;,&#x27;commenter&#x27;,&#x27;viewer&#x27;) or e is null or length(e)&gt;254 or e !~ &#x27;^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$&#x27; or p_code is null or p_code !~ &#x27;^[A-Za-z0-9]{8}$&#x27; then raise exception &#x27;Invalid invite&#x27;;end if;
+ delete from public.tl3_joins where group_id=p_group and (expires_at&lt;now() or epoch&lt;&gt;g.epoch);
+ if not exists(select 1 from public.tl2_members m join auth.users u on u.id=m.user_id where m.group_id=p_group and lower(u.email)=e)
+ and not exists(select 1 from public.tl3_joins where group_id=p_group and email=e)
+ and (select count(*) from public.tl2_members where group_id=p_group)+(select count(*) from public.tl2_invites where group_id=p_group and expires_at&gt;now())+(select count(*) from public.tl3_joins where group_id=p_group and bundle is null)&gt;=10 then raise exception &#x27;Group is full&#x27;;end if;
+ insert into public.tl3_joins(group_id,email,role,code_hash,epoch,expires_at) values(p_group,e,p_role,encode(sha256(convert_to(p_code,&#x27;UTF8&#x27;)),&#x27;hex&#x27;),g.epoch,now()+interval &#x27;24 hours&#x27;)
+ on conflict(group_id,email) do update set role=excluded.role,code_hash=excluded.code_hash,epoch=excluded.epoch,expires_at=excluded.expires_at,request_user=null,public_key=null,bundle=null;
+ insert into public.tl2_audit(group_id,actor_id,action) values(p_group,auth.uid(),&#x27;short_invite_created&#x27;);
+end $$;
+-- Invalid attempts RETURN a status, so the per-user throttle is committed.
+create or replace function public.tl3_request(p_code text,p_public text) returns jsonb language plpgsql security definer set search_path=&#x27;&#x27; as $$
+declare j public.tl3_joins%rowtype;g public.tl2_groups%rowtype;e text;attempts integer;
+begin
+ select lower(email) into e from auth.users where id=auth.uid() and email_confirmed_at is not null;
+ if e is null then raise exception &#x27;Verified sign in required&#x27; using errcode=&#x27;42501&#x27;;end if;
+ insert into tl2_private.join_attempts values(auth.uid(),clock_timestamp(),1)
+ on conflict(user_id) do update set started=case when join_attempts.started&lt;now()-interval &#x27;15 minutes&#x27; then clock_timestamp() else join_attempts.started end,n=case when join_attempts.started&lt;now()-interval &#x27;15 minutes&#x27; then 1 else join_attempts.n+1 end returning n into attempts;
+ if attempts&gt;10 then return jsonb_build_object(&#x27;status&#x27;,&#x27;slow&#x27;);end if;
+ if p_code is null or p_code !~ &#x27;^[A-Za-z0-9]{8}$&#x27; or p_public is null or p_public !~ &#x27;^[A-Za-z0-9+/]{87}=$&#x27; then return jsonb_build_object(&#x27;status&#x27;,&#x27;invalid&#x27;);end if;
+ select * into j from public.tl3_joins where code_hash=encode(sha256(convert_to(p_code,&#x27;UTF8&#x27;)),&#x27;hex&#x27;) and email=e;
+ if not found then return jsonb_build_object(&#x27;status&#x27;,&#x27;invalid&#x27;);end if;
+ select * into g from public.tl2_groups where id=j.group_id for update;
+ select * into j from public.tl3_joins where id=j.id for update;
+ if not found or j.email&lt;&gt;e or j.expires_at&lt;now() or j.epoch&lt;&gt;g.epoch or j.code_hash&lt;&gt;encode(sha256(convert_to(p_code,&#x27;UTF8&#x27;)),&#x27;hex&#x27;) then return jsonb_build_object(&#x27;status&#x27;,&#x27;invalid&#x27;);end if;
+ if j.request_user is not null and (j.request_user&lt;&gt;auth.uid() or j.public_key&lt;&gt;p_public) then return jsonb_build_object(&#x27;status&#x27;,&#x27;device&#x27;);end if;
+ if j.request_user is null then update public.tl3_joins set request_user=auth.uid(),public_key=p_public where id=j.id;end if;
+ return jsonb_build_object(&#x27;status&#x27;,case when j.bundle is null then &#x27;waiting&#x27; else &#x27;ready&#x27; end,&#x27;group&#x27;,g.id,&#x27;name&#x27;,g.name,&#x27;epoch&#x27;,g.epoch,&#x27;bundle&#x27;,j.bundle);
+end $$;
+create or replace function public.tl3_pending(p_group uuid) returns table(id uuid,email text,role text,request_user uuid,public_key text,epoch integer,approved boolean) language plpgsql security definer set search_path=&#x27;&#x27; as $$
+begin
+ if tl2_private.role_for(p_group) is distinct from &#x27;admin&#x27; then raise exception &#x27;Admin required&#x27; using errcode=&#x27;42501&#x27;;end if;
+ return query select j.id,j.email,j.role,j.request_user,j.public_key,j.epoch,j.bundle is not null from public.tl3_joins j join public.tl2_groups g on g.id=j.group_id where j.group_id=p_group and j.epoch=g.epoch and j.expires_at&gt;now();
+end $$;
+create or replace function public.tl3_approve(p_group uuid,p_id uuid,p_public text,p_epoch integer,p_bundle text) returns void language plpgsql security definer set search_path=&#x27;&#x27; as $$
+declare j public.tl3_joins%rowtype;g public.tl2_groups%rowtype;
+begin
+ select * into g from public.tl2_groups where id=p_group for update;
+ if tl2_private.role_for(p_group) is distinct from &#x27;admin&#x27; then raise exception &#x27;Admin required&#x27; using errcode=&#x27;42501&#x27;;end if;
+ select * into j from public.tl3_joins where id=p_id and group_id=p_group for update;
+ if not found or j.request_user is null or j.bundle is not null or j.expires_at&lt;now() or j.epoch&lt;&gt;g.epoch or p_epoch is distinct from g.epoch or p_public is distinct from j.public_key then raise exception &#x27;Refresh required&#x27; using errcode=&#x27;40001&#x27;;end if;
+ if not exists(select 1 from auth.users where id=j.request_user and lower(email)=j.email and email_confirmed_at is not null) then raise exception &#x27;Verified member required&#x27;;end if;
+ if p_bundle is null or octet_length(p_bundle) not between 80 and 4096 then raise exception &#x27;Invalid invitation&#x27;;end if;
+ if not exists(select 1 from public.tl2_members where group_id=p_group and user_id=j.request_user) then
+  if (select count(*) from public.tl2_members where group_id=p_group)&gt;=10 then raise exception &#x27;Group is full&#x27;;end if;
+  insert into public.tl2_members values(p_group,j.request_user,j.role);
+ end if;
+ update public.tl3_joins set bundle=p_bundle where id=j.id;
+ insert into public.tl2_audit(group_id,actor_id,action) values(p_group,auth.uid(),&#x27;short_invite_approved&#x27;);
+end $$;
+create or replace function public.tl3_cancel(p_group uuid,p_id uuid) returns void language plpgsql security definer set search_path=&#x27;&#x27; as $$
+begin
+ perform 1 from public.tl2_groups where id=p_group for update;
+ if tl2_private.role_for(p_group) is distinct from &#x27;admin&#x27; then raise exception &#x27;Admin required&#x27; using errcode=&#x27;42501&#x27;;end if;
+ delete from public.tl3_joins where group_id=p_group and id=p_id;
+end $$;
+revoke all on function public.tl3_invite(uuid,text,text,text),public.tl3_request(text,text),public.tl3_pending(uuid),public.tl3_approve(uuid,uuid,text,integer,text),public.tl3_cancel(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.tl3_invite(uuid,text,text,text),public.tl3_request(text,text),public.tl3_pending(uuid),public.tl3_approve(uuid,uuid,text,integer,text),public.tl3_cancel(uuid,uuid) to authenticated;
+
+
+
+-- ===== Phone-Identity-Upgrade =====
+-- Email + verified E.164 phone identities. Preserves existing accounts and invite APIs.
+
+create or replace function public.tl2_create(p_id uuid,p_name text,p_envelope text) returns void language plpgsql security definer set search_path=&#x27;&#x27; as $$
+begin
+ perform 1 from auth.users where id=auth.uid() and (email_confirmed_at is not null or phone_confirmed_at is not null) for update;
+ if not found then raise exception &#x27;Verified sign in required&#x27; using errcode=&#x27;42501&#x27;; end if;
+ if (select count(*) from public.tl2_groups where owner_id=auth.uid())&gt;=3 then raise exception &#x27;Maximum three groups&#x27;; end if;
+ insert into public.tl2_groups(id,name,owner_id,envelope) values(p_id,btrim(p_name),auth.uid(),p_envelope);
+ insert into public.tl2_members values(p_id,auth.uid(),&#x27;admin&#x27;);
+ insert into public.tl2_audit(group_id,actor_id,action) values(p_id,auth.uid(),&#x27;created&#x27;);
+end $$;
+create or replace function public.tl2_people(p_group uuid) returns table(user_id uuid,role text,label text) language plpgsql security definer set search_path=&#x27;&#x27; as $$
+begin
+ if tl2_private.role_for(p_group) is distinct from &#x27;admin&#x27; then raise exception &#x27;Admin required&#x27; using errcode=&#x27;42501&#x27;; end if;
+ return query select m.user_id,m.role,coalesce(nullif(u.email,&#x27;&#x27;),case when u.phone_confirmed_at is not null then &#x27;+&#x27;||ltrim(u.phone,&#x27;+&#x27;) end,&#x27;Member&#x27;)::text from public.tl2_members m join auth.users u on u.id=m.user_id where m.group_id=p_group;
+end $$;
+create or replace function public.tl3_invite(p_group uuid,p_email text,p_role text,p_code text) returns void language plpgsql security definer set search_path=&#x27;&#x27; as $$
+declare g public.tl2_groups%rowtype;e text:=lower(btrim(p_email));
+begin
+ select * into g from public.tl2_groups where id=p_group for update;
+ if tl2_private.role_for(p_group) is distinct from &#x27;admin&#x27; then raise exception &#x27;Admin required&#x27; using errcode=&#x27;42501&#x27;;end if;
+ if p_role is null or p_role not in(&#x27;admin&#x27;,&#x27;editor&#x27;,&#x27;commenter&#x27;,&#x27;viewer&#x27;) or e is null or length(e)&gt;254 or (e !~ &#x27;^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$&#x27; and e !~ &#x27;^[+][1-9][0-9]{7,14}$&#x27;) or p_code is null or p_code !~ &#x27;^[A-Za-z0-9]{8}$&#x27; then raise exception &#x27;Invalid invite&#x27;;end if;
+ delete from public.tl3_joins where group_id=p_group and (expires_at&lt;now() or epoch&lt;&gt;g.epoch);
+ if not exists(select 1 from public.tl2_members m join auth.users u on u.id=m.user_id where m.group_id=p_group and (lower(u.email)=e or (u.phone_confirmed_at is not null and &#x27;+&#x27;||ltrim(u.phone,&#x27;+&#x27;)=e)))
+ and not exists(select 1 from public.tl3_joins where group_id=p_group and email=e)
+ and (select count(*) from public.tl2_members where group_id=p_group)+(select count(*) from public.tl2_invites where group_id=p_group and expires_at&gt;now())+(select count(*) from public.tl3_joins where group_id=p_group and bundle is null)&gt;=10 then raise exception &#x27;Group is full&#x27;;end if;
+ insert into public.tl3_joins(group_id,email,role,code_hash,epoch,expires_at) values(p_group,e,p_role,encode(sha256(convert_to(p_code,&#x27;UTF8&#x27;)),&#x27;hex&#x27;),g.epoch,now()+interval &#x27;24 hours&#x27;)
+ on conflict(group_id,email) do update set role=excluded.role,code_hash=excluded.code_hash,epoch=excluded.epoch,expires_at=excluded.expires_at,request_user=null,public_key=null,bundle=null;
+ insert into public.tl2_audit(group_id,actor_id,action) values(p_group,auth.uid(),&#x27;short_invite_created&#x27;);
+end $$;
+create or replace function public.tl3_request(p_code text,p_public text) returns jsonb language plpgsql security definer set search_path=&#x27;&#x27; as $$
+declare j public.tl3_joins%rowtype;g public.tl2_groups%rowtype;e text;p text;attempts integer;
+begin
+ select case when email_confirmed_at is not null then lower(email) end,case when phone_confirmed_at is not null then &#x27;+&#x27;||ltrim(phone,&#x27;+&#x27;) end into e,p from auth.users where id=auth.uid();
+ if e is null and p is null then raise exception &#x27;Verified sign in required&#x27; using errcode=&#x27;42501&#x27;;end if;
+ insert into tl2_private.join_attempts values(auth.uid(),clock_timestamp(),1)
+ on conflict(user_id) do update set started=case when join_attempts.started&lt;now()-interval &#x27;15 minutes&#x27; then clock_timestamp() else join_attempts.started end,n=case when join_attempts.started&lt;now()-interval &#x27;15 minutes&#x27; then 1 else join_attempts.n+1 end returning n into attempts;
+ if attempts&gt;10 then return jsonb_build_object(&#x27;status&#x27;,&#x27;slow&#x27;);end if;
+ if p_code is null or p_code !~ &#x27;^[A-Za-z0-9]{8}$&#x27; or p_public is null or p_public !~ &#x27;^[A-Za-z0-9+/]{87}=$&#x27; then return jsonb_build_object(&#x27;status&#x27;,&#x27;invalid&#x27;);end if;
+ select * into j from public.tl3_joins where code_hash=encode(sha256(convert_to(p_code,&#x27;UTF8&#x27;)),&#x27;hex&#x27;) and email in(e,p);
+ if not found then return jsonb_build_object(&#x27;status&#x27;,&#x27;invalid&#x27;);end if;
+ select * into g from public.tl2_groups where id=j.group_id for update;
+ select * into j from public.tl3_joins where id=j.id for update;
+ if not found or (j.email is distinct from e and j.email is distinct from p) or j.expires_at&lt;now() or j.epoch&lt;&gt;g.epoch or j.code_hash&lt;&gt;encode(sha256(convert_to(p_code,&#x27;UTF8&#x27;)),&#x27;hex&#x27;) then return jsonb_build_object(&#x27;status&#x27;,&#x27;invalid&#x27;);end if;
+ if j.request_user is not null and (j.request_user&lt;&gt;auth.uid() or j.public_key&lt;&gt;p_public) then return jsonb_build_object(&#x27;status&#x27;,&#x27;device&#x27;);end if;
+ if j.request_user is null then update public.tl3_joins set request_user=auth.uid(),public_key=p_public where id=j.id;end if;
+ return jsonb_build_object(&#x27;status&#x27;,case when j.bundle is null then &#x27;waiting&#x27; else &#x27;ready&#x27; end,&#x27;group&#x27;,g.id,&#x27;name&#x27;,g.name,&#x27;epoch&#x27;,g.epoch,&#x27;bundle&#x27;,j.bundle);
+end $$;
+create or replace function public.tl3_approve(p_group uuid,p_id uuid,p_public text,p_epoch integer,p_bundle text) returns void language plpgsql security definer set search_path=&#x27;&#x27; as $$
+declare j public.tl3_joins%rowtype;g public.tl2_groups%rowtype;
+begin
+ select * into g from public.tl2_groups where id=p_group for update;
+ if tl2_private.role_for(p_group) is distinct from &#x27;admin&#x27; then raise exception &#x27;Admin required&#x27; using errcode=&#x27;42501&#x27;;end if;
+ select * into j from public.tl3_joins where id=p_id and group_id=p_group for update;
+ if not found or j.request_user is null or j.bundle is not null or j.expires_at&lt;now() or j.epoch&lt;&gt;g.epoch or p_epoch is distinct from g.epoch or p_public is distinct from j.public_key then raise exception &#x27;Refresh required&#x27; using errcode=&#x27;40001&#x27;;end if;
+ if not exists(select 1 from auth.users where id=j.request_user and ((lower(email)=j.email and email_confirmed_at is not null) or (&#x27;+&#x27;||ltrim(phone,&#x27;+&#x27;)=j.email and phone_confirmed_at is not null))) then raise exception &#x27;Verified member required&#x27;;end if;
+ if p_bundle is null or octet_length(p_bundle) not between 80 and 4096 then raise exception &#x27;Invalid invitation&#x27;;end if;
+ if not exists(select 1 from public.tl2_members where group_id=p_group and user_id=j.request_user) then
+  if (select count(*) from public.tl2_members where group_id=p_group)&gt;=10 then raise exception &#x27;Group is full&#x27;;end if;
+  insert into public.tl2_members values(p_group,j.request_user,j.role);
+ end if;
+ update public.tl3_joins set bundle=p_bundle where id=j.id;
+ insert into public.tl2_audit(group_id,actor_id,action) values(p_group,auth.uid(),&#x27;short_invite_approved&#x27;);
+end $$;
+revoke all on function public.tl2_create(uuid,text,text),public.tl2_people(uuid),public.tl3_invite(uuid,text,text,text),public.tl3_request(text,text),public.tl3_approve(uuid,uuid,text,integer,text) from public,anon;
+grant execute on function public.tl2_create(uuid,text,text),public.tl2_people(uuid),public.tl3_invite(uuid,text,text,text),public.tl3_request(text,text),public.tl3_approve(uuid,uuid,text,integer,text) to authenticated;
+
+
+-- ===== Short-Recovery-Upgrade =====
+create table if not exists tl2_private.recoveries(
+ user_id uuid not null references auth.users(id) on delete cascade,
+ group_id uuid not null references public.tl2_groups(id) on delete cascade,
+ epoch integer not null check(epoch&gt;0),lookup text not null check(lookup ~ &#x27;^[a-f0-9]{64}$&#x27;),
+ bundle text not null check(length(bundle) between 80 and 8192),updated_at timestamptz not null default now(),
+ primary key(user_id,group_id),unique(user_id,lookup)
+);
+alter table tl2_private.recoveries enable row level security;
+revoke all on tl2_private.recoveries from public,anon,authenticated;
+create table if not exists tl2_private.recovery_attempts(user_id uuid primary key references auth.users(id) on delete cascade,started timestamptz not null,attempts integer not null);
+alter table tl2_private.recovery_attempts enable row level security;
+revoke all on tl2_private.recovery_attempts from public,anon,authenticated;
+create or replace function tl2_private.save_recovery(p_group uuid,p_epoch integer,p_lookup text,p_bundle text)
+returns void language plpgsql security definer set search_path=&#x27;&#x27; as $$
+begin
+ if auth.uid() is null or tl2_private.role_for(p_group) is distinct from &#x27;admin&#x27; then raise exception &#x27;Admin required&#x27;;end if;
+ perform 1 from public.tl2_groups where id=p_group and epoch=p_epoch for update;
+ if not found then raise exception &#x27;Refresh required&#x27;;end if;
+ insert into tl2_private.recoveries(user_id,group_id,epoch,lookup,bundle)values(auth.uid(),p_group,p_epoch,p_lookup,p_bundle)
+ on conflict(user_id,group_id)do update set epoch=excluded.epoch,lookup=excluded.lookup,bundle=excluded.bundle,updated_at=now();
+end $$;
+create or replace function tl2_private.restore_recovery(p_lookup text)
+returns jsonb language plpgsql security definer set search_path=&#x27;&#x27; as $$
+declare v_attempt integer;v_bundle text;
+begin
+ if auth.uid() is null then raise exception &#x27;Sign in required&#x27;;end if;
+ insert into tl2_private.recovery_attempts values(auth.uid(),now(),1)
+ on conflict(user_id)do update set attempts=case when tl2_private.recovery_attempts.started&lt;now()-interval &#x27;10 minutes&#x27; then 1 else tl2_private.recovery_attempts.attempts+1 end,started=case when tl2_private.recovery_attempts.started&lt;now()-interval &#x27;10 minutes&#x27; then now() else tl2_private.recovery_attempts.started end
+ returning attempts into v_attempt;
+ if v_attempt&gt;10 then return jsonb_build_object(&#x27;status&#x27;,&#x27;wait&#x27;);end if;
+ select r.bundle into v_bundle from tl2_private.recoveries r join public.tl2_groups g on g.id=r.group_id and g.epoch=r.epoch
+ where r.user_id=auth.uid() and r.lookup=p_lookup and tl2_private.role_for(r.group_id) is not null;
+ if v_bundle is null then return jsonb_build_object(&#x27;status&#x27;,&#x27;invalid&#x27;);end if;
+ return jsonb_build_object(&#x27;status&#x27;,&#x27;ready&#x27;,&#x27;bundle&#x27;,v_bundle);
+end $$;
+revoke all on function tl2_private.save_recovery(uuid,integer,text,text),tl2_private.restore_recovery(text) from public,anon;
+grant execute on function tl2_private.save_recovery(uuid,integer,text,text),tl2_private.restore_recovery(text) to authenticated;
+create or replace function public.tl5_save_recovery(p_group uuid,p_epoch integer,p_lookup text,p_bundle text)returns void language sql security invoker set search_path=&#x27;&#x27; as $$select tl2_private.save_recovery(p_group,p_epoch,p_lookup,p_bundle);$$;
+create or replace function public.tl5_restore_recovery(p_lookup text)returns jsonb language sql security invoker set search_path=&#x27;&#x27; as $$select tl2_private.restore_recovery(p_lookup);$$;
+revoke all on function public.tl5_save_recovery(uuid,integer,text,text),public.tl5_restore_recovery(text) from public,anon;
+grant execute on function public.tl5_save_recovery(uuid,integer,text,text),public.tl5_restore_recovery(text) to authenticated;
+
+
+-- ===== Delete-Team-Upgrade =====
+-- Owner-only deletion, with exact-name confirmation. No teams are deleted by installation.
+create or replace function tl2_private.delete_group(p_group uuid,p_name text)
+returns void language plpgsql security definer set search_path=&#x27;&#x27; as $$
+declare v_owner uuid;v_name text;
+begin
+ if auth.uid() is null then raise exception &#x27;Owner required&#x27;;end if;
+ select owner_id,name into v_owner,v_name from public.tl2_groups where id=p_group for update;
+ if not found or v_owner&lt;&gt;auth.uid() then raise exception &#x27;Owner required&#x27;;end if;
+ if p_name is distinct from v_name then raise exception &#x27;Team name does not match&#x27;;end if;
+ delete from public.tl3_joins where group_id=p_group;
+ delete from public.tl2_invites where group_id=p_group;
+ delete from public.tl2_comments where group_id=p_group;
+ delete from public.tl2_audit where group_id=p_group;
+ delete from public.tl2_members where group_id=p_group;
+ delete from public.tl2_groups where id=p_group;
+end $$;
+revoke all on function tl2_private.delete_group(uuid,text) from public,anon;
+grant execute on function tl2_private.delete_group(uuid,text) to authenticated;
+create or replace function public.tl4_delete_group(p_group uuid,p_name text)
+returns void language sql security invoker set search_path=&#x27;&#x27; as $$select tl2_private.delete_group(p_group,p_name);$$;
+revoke all on function public.tl4_delete_group(uuid,text) from public,anon;
+grant execute on function public.tl4_delete_group(uuid,text) to authenticated;
+
+-- ===== owner-setup =====
+-- Team Ledger 4 — Owner Dashboard setup (run ONCE in Supabase → SQL Editor).
+-- Safe to run again. Creates only new tl_* tables; existing tl2_* group tables are untouched.
+-- Collects: anonymous daily &quot;app opened&quot; counts, APK download clicks, star reviews.
+-- NEVER collects ledger records, names of accounts, amounts or phone numbers.
+
+-- 1) Who is the owner (only this login can read the dashboard)
+create or replace function public.tl_is_owner() returns boolean
+language sql stable as $$
+  select coalesce(lower(auth.jwt() -&gt;&gt; &#x27;email&#x27;) = &#x27;drkarthikmm24@gmail.com&#x27;, false)
+$$;
+
+-- 2) Tables
+create table if not exists public.tl_pings (
+  install_id text not null check (char_length(install_id) between 8 and 64),
+  day date not null default current_date,
+  platform text not null default &#x27;web&#x27; check (char_length(platform) &lt;= 20),
+  version text not null default &#x27;&#x27; check (char_length(version) &lt;= 20),
+  lang text not null default &#x27;&#x27; check (char_length(lang) &lt;= 5),
+  installed boolean not null default false,
+  created_at timestamptz not null default now(),
+  primary key (install_id, day)
+);
+create table if not exists public.tl_reviews (
+  id bigint generated always as identity primary key,
+  install_id text not null check (char_length(install_id) between 8 and 64),
+  stars smallint not null check (stars between 1 and 5),
+  text text not null default &#x27;&#x27; check (char_length(text) &lt;= 1000),
+  name text not null default &#x27;&#x27; check (char_length(name) &lt;= 60),
+  platform text not null default &#x27;&#x27; check (char_length(platform) &lt;= 20),
+  version text not null default &#x27;&#x27; check (char_length(version) &lt;= 20),
+  lang text not null default &#x27;&#x27; check (char_length(lang) &lt;= 5),
+  hidden boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create table if not exists public.tl_downloads (
+  id bigint generated always as identity primary key,
+  platform text not null default &#x27;&#x27; check (char_length(platform) &lt;= 20),
+  source text not null default &#x27;&#x27; check (char_length(source) &lt;= 40),
+  created_at timestamptz not null default now()
+);
+create table if not exists public.tl_revenue (
+  id bigint generated always as identity primary key,
+  day date not null default current_date,
+  amount_paise bigint not null check (amount_paise between -100000000000 and 100000000000),
+  source text not null default &#x27;&#x27; check (char_length(source) &lt;= 60),
+  note text not null default &#x27;&#x27; check (char_length(note) &lt;= 300),
+  created_at timestamptz not null default now()
+);
+
+-- 3) Row level security: the public app may only ADD rows; only the owner may read.
+alter table public.tl_pings enable row level security;
+alter table public.tl_reviews enable row level security;
+alter table public.tl_downloads enable row level security;
+alter table public.tl_revenue enable row level security;
+
+drop policy if exists tl_pings_insert on public.tl_pings;
+create policy tl_pings_insert on public.tl_pings for insert to anon, authenticated with check (day between current_date - 1 and current_date + 1);
+drop policy if exists tl_pings_owner on public.tl_pings;
+create policy tl_pings_owner on public.tl_pings for select to authenticated using (public.tl_is_owner());
+
+drop policy if exists tl_reviews_insert on public.tl_reviews;
+create policy tl_reviews_insert on public.tl_reviews for insert to anon, authenticated with check (hidden = false);
+drop policy if exists tl_reviews_owner on public.tl_reviews;
+create policy tl_reviews_owner on public.tl_reviews for all to authenticated using (public.tl_is_owner()) with check (public.tl_is_owner());
+
+drop policy if exists tl_downloads_insert on public.tl_downloads;
+create policy tl_downloads_insert on public.tl_downloads for insert to anon, authenticated with check (true);
+drop policy if exists tl_downloads_owner on public.tl_downloads;
+create policy tl_downloads_owner on public.tl_downloads for select to authenticated using (public.tl_is_owner());
+
+drop policy if exists tl_revenue_owner on public.tl_revenue;
+create policy tl_revenue_owner on public.tl_revenue for all to authenticated using (public.tl_is_owner()) with check (public.tl_is_owner());
+
+grant insert on public.tl_pings, public.tl_reviews, public.tl_downloads to anon, authenticated;
+grant select on public.tl_pings, public.tl_reviews, public.tl_downloads to authenticated;
+grant select, insert, update, delete on public.tl_revenue to authenticated;
+grant update, delete on public.tl_reviews to authenticated;
+
+-- 4) One call returns every number the dashboard shows (owner only).
+create or replace function public.tl_owner_summary() returns json
+language plpgsql stable security definer set search_path = public as $$
+declare r json;
+begin
+  if not public.tl_is_owner() then raise exception &#x27;owner only&#x27;; end if;
+  select json_build_object(
+    &#x27;users_total&#x27;,   (select count(distinct install_id) from tl_pings),
+    &#x27;active_today&#x27;,  (select count(distinct install_id) from tl_pings where day = current_date),
+    &#x27;active_7&#x27;,      (select count(distinct install_id) from tl_pings where day &gt; current_date - 7),
+    &#x27;active_30&#x27;,     (select count(distinct install_id) from tl_pings where day &gt; current_date - 30),
+    &#x27;new_7&#x27;,         (select count(*) from (select install_id, min(day) d from tl_pings group by 1) x where d &gt; current_date - 7),
+    &#x27;installed&#x27;,     (select count(distinct install_id) from tl_pings where installed),
+    &#x27;downloads_total&#x27;,(select count(*) from tl_downloads),
+    &#x27;downloads_7&#x27;,   (select count(*) from tl_downloads where created_at &gt; now() - interval &#x27;7 days&#x27;),
+    &#x27;reviews_total&#x27;, (select count(*) from tl_reviews where not hidden),
+    &#x27;stars_avg&#x27;,     (select round(avg(stars)::numeric, 2) from tl_reviews where not hidden),
+    &#x27;stars_dist&#x27;,    (select json_object_agg(stars, n) from (select stars, count(*) n from tl_reviews where not hidden group by 1) s),
+    &#x27;revenue_total&#x27;, (select coalesce(sum(amount_paise), 0) from tl_revenue),
+    &#x27;revenue_month&#x27;, (select coalesce(sum(amount_paise), 0) from tl_revenue where day &gt;= date_trunc(&#x27;month&#x27;, current_date)),
+    &#x27;revenue_by_month&#x27;, (select coalesce(json_agg(json_build_object(&#x27;m&#x27;, m, &#x27;v&#x27;, v) order by m), &#x27;[]&#x27;) from (select to_char(day, &#x27;YYYY-MM&#x27;) m, sum(amount_paise) v from tl_revenue group by 1 order by 1 desc limit 12) q),
+    &#x27;daily_active&#x27;,  (select coalesce(json_agg(json_build_object(&#x27;d&#x27;, d, &#x27;n&#x27;, n) order by d), &#x27;[]&#x27;) from (select day d, count(distinct install_id) n from tl_pings where day &gt; current_date - 30 group by 1) q),
+    &#x27;daily_downloads&#x27;,(select coalesce(json_agg(json_build_object(&#x27;d&#x27;, d, &#x27;n&#x27;, n) order by d), &#x27;[]&#x27;) from (select created_at::date d, count(*) n from tl_downloads where created_at &gt; now() - interval &#x27;30 days&#x27; group by 1) q),
+    &#x27;by_platform&#x27;,   (select coalesce(json_object_agg(platform, n), &#x27;{}&#x27;) from (select platform, count(distinct install_id) n from tl_pings where day &gt; current_date - 30 group by 1) q),
+    &#x27;by_version&#x27;,    (select coalesce(json_object_agg(version, n), &#x27;{}&#x27;) from (select version, count(distinct install_id) n from tl_pings where day &gt; current_date - 30 group by 1) q),
+    &#x27;by_lang&#x27;,       (select coalesce(json_object_agg(lang, n), &#x27;{}&#x27;) from (select lang, count(distinct install_id) n from tl_pings where day &gt; current_date - 30 group by 1) q)
+  ) into r;
+  return r;
+end $$;
+revoke all on function public.tl_owner_summary() from public, anon;
+grant execute on function public.tl_owner_summary() to authenticated;
+
+-- 5) Public website may show real reviews (not hidden), without device ids.
+drop policy if exists tl_reviews_public on public.tl_reviews;
+create policy tl_reviews_public on public.tl_reviews for select to anon using (not hidden);
+revoke select on public.tl_reviews from anon;
+grant select (id, stars, text, name, platform, created_at, hidden) on public.tl_reviews to anon;
+
+select &#x27;Team Ledger server ready&#x27; as status;
+</textarea>
+<script>
+document.getElementById('c').onclick=async()=>{const t=document.getElementById('t');let ok=false;
+try{await navigator.clipboard.writeText(t.value);ok=true}catch(e){t.focus();t.select();t.setSelectionRange(0,t.value.length);ok=document.execCommand('copy')}
+document.getElementById('ok').style.display=ok?'block':'none';if(!ok)alert('நகலெடுக்க முடியவில்லை: பெட்டியை அழுத்திப் பிடித்து Select All → Copy');};
+</script></body></html>

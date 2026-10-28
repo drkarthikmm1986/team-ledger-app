@@ -6,7 +6,7 @@ import { Groups } from '../online/groups.js';
 import { fingerprint } from '../online/invitations.js';
 import { normalizePhone, normalizeContact, phoneError } from '../online/phone.js';
 import { createGroupBook } from '../online/group-book.js';
-import { toast, openSheet, closeSheet, confirmBox, formSheet, fieldHtml, copyText } from '../ui/kit.js';
+import { toast, openSheet, closeSheet, confirmBox, formSheet, fieldHtml, copyText, toggleSecret } from '../ui/kit.js';
 import { roleName } from './ledger.js';
 
 export const online = { client: null, vault: null, groups: null, user: null, list: null, book: null, busy: false, lastActivity: Date.now(), team: null };
@@ -57,11 +57,10 @@ export function viewOnline(ctx) {
     <p class="note center">${T('தனிக் கணக்குகள் தானாகப் பகிரப்படாது.', 'Your personal book is never shared automatically.')}</p>`;
 }
 function loginHtml() {
-  const saved = (() => { try { return JSON.parse(ls.get('tl-login-emails', '[]')).filter(v => typeof v === 'string').slice(0, 5); } catch (e) { return []; } })();
   const phone = online.phoneMode;
   return `<form id="ol-login" class="card pad16 stack" novalidate>
     <div class="seg full"><button type="button" class="${phone ? '' : 'on'}" data-act="ol-mode" data-v="email">${T('மின்னஞ்சல்', 'Email')}</button><button type="button" class="${phone ? 'on' : ''}" data-act="ol-mode" data-v="phone">${T('மொபைல்', 'Mobile')}</button></div>
-    <div class="field"><label for="ol-id">${phone ? T('மொபைல் எண்', 'Mobile number') : T('மின்னஞ்சல்', 'Email')}</label><input class="input" id="ol-id" type="${phone ? 'tel' : 'email'}" inputmode="${phone ? 'tel' : 'email'}" autocapitalize="none" spellcheck="false" autocomplete="username" value="${esc(phone ? '' : saved[0] || '')}" placeholder="${phone ? '+91 9876543210' : 'name@example.com'}" ${phone ? '' : 'list="ol-saved"'}><datalist id="ol-saved">${saved.map(s => `<option value="${esc(s)}">`).join('')}</datalist></div>
+    <div class="field"><label for="ol-id">${phone ? T('மொபைல் எண்', 'Mobile number') : T('மின்னஞ்சல்', 'Email')}</label><input class="input" id="ol-id" type="${phone ? 'tel' : 'email'}" inputmode="${phone ? 'tel' : 'email'}" autocapitalize="none" spellcheck="false" autocomplete="off" value="" placeholder="${phone ? '+91 9876543210' : 'name@example.com'}"></div>
     <div class="field"><label for="ol-pw">${T('கடவுச்சொல்', 'Password')}</label><div class="pw"><input class="input" id="ol-pw" type="password" autocomplete="current-password"><button type="button" class="mini" data-act="ol-eye" aria-label="${T('காட்டு', 'Show')}">${ic('eye', 18)}</button></div></div>
     ${window.LedgerCredentials && !phone ? `<label class="check-row"><input type="checkbox" id="ol-remember" checked> ${T('இந்த போனில் நினைவில் வை', 'Remember on this phone')}</label>` : ''}
     <p class="form-error" role="alert"></p>
@@ -86,13 +85,12 @@ export function bindOnlineForms(ctx) {
     try {
       await signIn(identity, pw);
       if (window.LedgerCredentials && !online.phoneMode) { if ($('#ol-remember') && $('#ol-remember').checked) window.LedgerCredentials.remember(id, pw); else window.LedgerCredentials.forget(id); }
-      if (!online.phoneMode) { try { const s = JSON.parse(ls.get('tl-login-emails', '[]')); ls.set('tl-login-emails', JSON.stringify([id, ...s.filter(x => x !== id)].slice(0, 5))); } catch (x) { } }
+      ls.del && ls.del('tl-login-emails');
       ctx.render(); loadList(ctx);
     } catch (x) { err.textContent = onlineError(x); btn.disabled = false; }
   };
   // Restore a remembered password (Android only, kept in the Android Keystore).
   const idEl = $('#ol-id');
-  if (window.LedgerCredentials && idEl && idEl.value && !online.phoneMode) requestSavedPassword(idEl.value);
   idEl && idEl.addEventListener('change', () => { if (window.LedgerCredentials && !online.phoneMode) requestSavedPassword(idEl.value.trim()); });
 }
 let credSeq = 0;
@@ -218,7 +216,7 @@ async function joinFlow(ctx, code) {
 
 export const onlineActions = {
   'ol-mode': (ctx, b) => { online.phoneMode = b.dataset.v === 'phone'; ctx.render(); },
-  'ol-eye': () => { const p = $('#ol-pw'); p.type = p.type === 'password' ? 'text' : 'password'; },
+  'ol-eye': (ctx, b) => { const shown = toggleSecret($('#ol-pw')); b.innerHTML = ic(shown ? 'eyeoff' : 'eye', 18); },
   'ol-refresh': ctx => { online.list = null; ctx.render(); loadList(ctx); },
   'ol-signout': async ctx => { if (await confirmBox(T('வெளியேறவா?', 'Sign out?'), T('குழுத் தகவல்கள் server-ல் பாதுகாப்பாக இருக்கும்.', 'Your group data stays safe on the server.'), T('வெளியேறு', 'Sign out'))) signOut(ctx); },
   'ol-open': (ctx, b) => openGroup(ctx, b.dataset.id, false),

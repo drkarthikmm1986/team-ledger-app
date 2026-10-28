@@ -1,7 +1,7 @@
 /* Team Ledger 4 — app shell: state, router, tab bar, event dispatch. */
 import { $, T, ic, CFG, lang, setLang, ls, native, VERSION } from './core/util.js';
 import { createLocalBook } from './data/local-book.js';
-import { toast, closeSheet, sheetOpen, sheetState } from './ui/kit.js';
+import { toast, closeSheet, sheetOpen, sheetState, hardenInputs } from './ui/kit.js';
 import { viewHome, viewAccount, viewReport, ledgerActions, fromSafeId } from './views/ledger.js';
 import { viewDetails, detailsActions, bindDetailsForms } from './views/details.js';
 import { viewOnline, viewTeam, onlineActions, bindOnlineForms, groupBook, online, onlineError, handleAuthLink, idleCheck, signedIn } from './views/online.js';
@@ -55,10 +55,25 @@ function render() {
   else html = `<div class="topbar"><button class="icon-btn" data-go="online">${ic('back')}</button><h1>${T('குழு திறக்கிறது…', 'Opening group…')}</h1></div><div class="loader"><span></span></div>`;
   const actions = (r.name === 'home' || r.name === 'acc') && book.canEdit && !(r.acc && r.acc.locked);
   const tab = r.group || r.name === 'online' || r.name === 'loading' || r.name === 'team' ? 'online' : r.name === 'acc' ? 'home' : r.name;
-  $('#app').innerHTML = `<div class="screen ${actions ? '' : 'no-actions'} ${r.group ? 'is-group' : ''} fade-in" data-view="${r.name}">${html}</div>${dock(r, tab, actions)}`;
+  const markup = `<div class="screen ${actions ? '' : 'no-actions'} ${r.group ? 'is-group' : ''} fade-in" data-view="${r.name}">${html}</div>${dock(r, tab, actions)}`;
+  if (!patchKeepingFocus(markup, r.name)) $('#app').innerHTML = markup;
   if (r.name === 'online') bindOnlineForms(ctx);
   if (r.name === 'details') bindDetailsForms(ctx, book);
   const q = $(ctx.ui.focusField || '#q'); if (q && ctx.ui.focusSearch) { q.focus(); try { q.setSelectionRange(q.value.length, q.value.length); } catch (e) { } ctx.ui.focusSearch = false; }
+}
+/* Re-render without destroying the field the user is typing in (a destroyed field closes the phone keyboard). */
+function patchKeepingFocus(markup, view) {
+  const app = $('#app'), act = document.activeElement, old = app.querySelector('.screen');
+  if (!old || !act || !act.id || !/INPUT|TEXTAREA/.test(act.tagName) || !old.contains(act) || old.dataset.view !== view) return false;
+  const tpl = document.createElement('div'); tpl.innerHTML = markup;
+  const ns = tpl.querySelector('.screen'), has = c => c.id === act.id || !!c.querySelector('#' + CSS.escape(act.id));
+  const keep = [...old.children].find(has), kids = [...ns.children], at = kids.findIndex(has);
+  if (!keep || at < 0) return false;
+  for (const c of [...old.children]) if (c !== keep) c.remove();
+  kids.forEach((c, i) => { if (i < at) old.insertBefore(c, keep); else if (i > at) old.appendChild(c); });
+  old.className = ns.className.replace('fade-in', '');
+  const d = app.querySelector('.dock'), nd = tpl.querySelector('.dock'); if (d && nd) d.replaceWith(nd);
+  return true;
 }
 function dock(r, tab, actions) {
   const acc = r.acc ? r.acc.id : '';
@@ -86,7 +101,7 @@ document.addEventListener('click', async ev => {
 });
 document.addEventListener('input', ev => {
   const id = ev.target.id;
-  if (id === 'q' || id === 'dq') { ctx.ui[id] = ev.target.value; const pos = ev.target.selectionStart; ctx.ui.focusSearch = true; ctx.ui.focusField = '#' + id; render(); const el = $('#' + id); if (el) try { el.setSelectionRange(pos, pos); } catch (e) { } }
+  if (id === 'q' || id === 'dq') { ctx.ui[id] = ev.target.value; render(); }
 });
 document.addEventListener('change', ev => {
   const t = ev.target;
@@ -118,6 +133,12 @@ setInterval(() => idleCheck(ctx), 30000);
 
 /* ---------- start ---------- */
 async function start() {
+  /* Phone keyboard: keep bottom sheets above it and the field being typed in visible. */
+  const vv = window.visualViewport;
+  if (vv) { const upd = () => { const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop), st = document.documentElement.style; st.setProperty('--kb', (kb > 80 ? kb : 0) + 'px'); st.setProperty('--vvh', vv.height + 'px'); }; vv.addEventListener('resize', upd); vv.addEventListener('scroll', upd); upd(); }
+  document.addEventListener('focusin', e => { const t = e.target; if (t && t.closest && t.closest('.sheet .body') && /INPUT|TEXTAREA/.test(t.tagName)) setTimeout(() => { try { t.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (x) { } }, 350); });
+  hardenInputs(document.body);
+  new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) hardenInputs(n); }).observe(document.body, { childList: true, subtree: true });
   setLang(lang()); applyTheme();
   if (window.matchMedia) { const m = matchMedia('(prefers-color-scheme: dark)'); m.addEventListener && m.addEventListener('change', () => render()); }
   await local.load();

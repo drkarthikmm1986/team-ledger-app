@@ -149,3 +149,33 @@ export async function copyText(text) {
   try { await navigator.clipboard.writeText(text); toast(T('நகலெடுக்கப்பட்டது', 'Copied')); return true; }
   catch (e) { toast(T('நகலெடுக்க முடியவில்லை — நீண்ட நேரம் அழுத்தி Copy செய்யவும்', 'Could not copy — long-press to copy')); return false; }
 }
+
+/* ---------- input hardening ----------
+   Phones' password managers and autofill (iOS "Strong Password", saved e-mails, card AutoFill,
+   Android autofill) were taking over our fields: keyboard hidden, every password box filled at once,
+   old e-mails popping up. Every field is a plain field: no autofill, no suggestions;
+   secrets are masked with CSS instead of type=password, so no password manager attaches. */
+const MASK_OK = (() => { try { return CSS.supports('-webkit-text-security', 'disc'); } catch (e) { return false; } })();
+export function hardenInputs(root) {
+  if (!root || !root.querySelectorAll) return;
+  const list = root.matches && root.matches('input,textarea') ? [root] : root.querySelectorAll('input,textarea');
+  for (const el of list) {
+    if (el.dataset.hard) continue; el.dataset.hard = '1';
+    const t = (el.getAttribute('type') || 'text').toLowerCase();
+    if (/checkbox|radio|file|range|color|hidden|date|month|time|button|submit/.test(t)) continue;
+    if (el.getAttribute('autocomplete') !== 'one-time-code') el.setAttribute('autocomplete', 'off');
+    el.setAttribute('data-lpignore', 'true'); el.setAttribute('data-1p-ignore', 'true'); el.setAttribute('data-form-type', 'other');
+    if (t === 'password' && MASK_OK) { el.type = 'text'; el.classList.add('secret'); }
+    if (t === 'password' || t === 'email' || el.classList.contains('secret')) {
+      el.setAttribute('autocapitalize', 'none'); el.setAttribute('autocorrect', 'off'); el.spellcheck = false;
+      if (t === 'email') { el.type = 'text'; el.setAttribute('inputmode', 'email'); el.classList.add('is-email'); }
+    }
+    el.removeAttribute('list');
+  }
+}
+/** Show / hide a masked field (works for both masked text and real password inputs). */
+export function toggleSecret(el) {
+  if (!el) return false;
+  if (el.classList.contains('secret') || el.classList.contains('unmasked')) { el.classList.toggle('secret'); el.classList.toggle('unmasked'); return !el.classList.contains('secret'); }
+  el.type = el.type === 'password' ? 'text' : 'password'; return el.type === 'text';
+}

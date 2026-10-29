@@ -11,6 +11,22 @@ export function createLocalBook() {
     get ledger() { return L; },
     get accounts() { return L.accounts; },
     get entries() { return L.entries; },
+    get holds() { return L.holds || []; },
+    /** Hold / to receive. mode: 'separate' (not in the book) | 'in' | 'out' | 'profit' (a linked record carries it). */
+    async putHold(h) {
+      L.holds = L.holds || [];
+      const i = L.holds.findIndex(x => x.id === h.id); if (i >= 0) L.holds[i] = h; else L.holds.push(h);
+      const ei = h.entryId ? L.entries.findIndex(e => e.id === h.entryId) : -1;
+      if (h.mode === 'separate') { if (ei >= 0) L.entries.splice(ei, 1); delete h.entryId; }
+      else {
+        h.entryId = h.entryId || 'hold-e-' + h.id;
+        const rec = { id: h.entryId, acc: h.acc, dir: h.mode === 'out' ? -1 : 1, amt: h.amt, date: h.date, time: '00:00', note: [h.name, h.note].filter(Boolean).join(' · '), party: h.name || '', cat: 'Hold', holdMode: h.mode, holdId: h.id,
+          profit: h.mode === 'profit' ? h.amt : 0, comm: 0, noBal: h.mode === 'profit', files: [], created: ei >= 0 ? L.entries[ei].created : Date.now() };
+        if (ei >= 0) L.entries[ei] = rec; else L.entries.push(rec);
+      }
+      book.save(); return h;
+    },
+    async deleteHold(id) { const h = (L.holds || []).find(x => x.id === id); if (!h) return; L.holds = L.holds.filter(x => x.id !== id); if (h.entryId) L.entries = L.entries.filter(e => e.id !== h.entryId); book.save(); },
     get vault() { return L.vault || null; },
     get demo() { return !!L.demo; },
     get storageOk() { return ok; },

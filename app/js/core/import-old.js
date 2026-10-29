@@ -110,14 +110,13 @@ function convert(old, makeId) {
     entries.push(rec);
     report.entries++;
   }
+  // Hold / to receive: kept as its own list, exactly like the old app (separate, or linked to an In / Out / Profit record)
+  const holds = [];
   for (const h of old.holds || []) {
     report.holds++;
-    if (h.ledgerEntryId) continue; // already counted through its linked record
-    entries.push({
-      id: 'hold-' + h.id, acc: h.accountId, date: h.date, time: '00:00', dir: h.effect === -1 ? -1 : 1,
-      amt: h.amount, note: [h.name, h.note].filter(Boolean).join(' · '), party: '', cat: 'Hold',
-      profit: 0, comm: 0, commPaid: 0, files: [], noBal: !!h.done, pending: !h.done, created: 0, imported: true
-    });
+    const linked = h.ledgerEntryId && old.entries.some(e => e.id === h.ledgerEntryId);
+    holds.push({ id: h.id, acc: h.accountId, name: h.name || '', amt: h.amount, date: h.date, note: h.note || '', done: !!h.done,
+      mode: linked ? (h.holdMode || (h.ledgerEffect === -1 ? 'out' : 'in')) : 'separate', entryId: linked ? h.ledgerEntryId : undefined });
   }
   for (const a of old.accounts) for (const s of a.settlements || []) {
     report.settlements++;
@@ -131,6 +130,7 @@ function convert(old, makeId) {
   // Expected balances, so the import screen can confirm totals match the old app.
   const expected = {};
   for (const a of old.accounts) expected[a.id] = (a.opening || 0) + old.entries.filter(e => e.accountId === a.id).reduce((n, e) => n + balanceEffect(e), 0);
-  return { accounts, entries, files, report, expected, vault: old.accountDetailsVault };
+  for (const h of holds) if (h.entryId) { const r = entries.find(e => e.id === h.entryId); if (r) r.holdId = h.id; }
+  return { accounts, entries, holds, files, report, expected, vault: old.accountDetailsVault };
 }
 export { convert, isOldBackup, balanceEffect, amounts };

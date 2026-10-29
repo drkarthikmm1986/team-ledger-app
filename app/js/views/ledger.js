@@ -44,7 +44,7 @@ export function helpSteps() {
 
 /* ---------------- Home ---------------- */
 export function viewHome(ctx, book) {
-  const t = today(), io = ls.get('tl4-home-io', 'today') === 'total' ? 'total' : 'today';
+  const t = today();
   const group = book.kind === 'group';
   const top = group
     ? `<div class="topbar"><button class="icon-btn" data-go="online" aria-label="${T('பின்', 'Back')}">${ic('back')}</button><h1>${esc(book.name)}<span class="sub line-blue">${ic('users', 14)} ${T('குழுக் கணக்கு', 'Group book')} · ${esc(roleName(book.role))}</span></h1>
@@ -61,7 +61,7 @@ export function viewHome(ctx, book) {
     </div>${group ? '' : `<div class="section-h"><h2>${T('3 படிகளில்', 'In 3 steps')}</h2></div>${helpSteps()}`}`;
   }
   const q = (ctx.ui.q || '').trim().toLowerCase();
-  let accs = book.accounts.filter(a => !a.archived).map(a => ({ a, t: accountTotals(book, a, '', ''), d: io === 'today' ? accountTotals(book, a, t, t) : null }));
+  let accs = book.accounts.filter(a => !a.archived).map(a => ({ a, t: accountTotals(book, a, '', '') }));
   accs.sort((x, y) => (y.t.last || '').localeCompare(x.t.last || '') || x.a.name.localeCompare(y.a.name));
   let found = [];
   if (q) {
@@ -73,25 +73,19 @@ export function viewHome(ctx, book) {
     ${backupDue ? `<button class="row card mt12 rounded" data-act="backup"><span class="ic amber">${ic('bell')}</span><span class="tx"><b>${T('Backup எடுக்கும் நேரம்', 'Time for a backup')}</b><small>${T('போன் தொலைந்தாலும் கணக்கு பாதுகாப்பாக இருக்கும்', 'Keeps your records safe if the phone is lost')}</small></span><span class="end">${ic('save', 20)}</span></button>` : ''}
     ${ctx.ui.searchOpen || q ? `<label class="search">${ic('search', 20)}<input id="q" type="search" value="${esc(ctx.ui.q)}" placeholder="${T('பெயர், குறிப்பு, தொகை தேடு', 'Search name, note, amount')}" autocomplete="off"><button data-act="search-close" aria-label="close">${ic('x', 20)}</button></label>` : ''}
     <div class="section-h"><h2>${T('கணக்குகள்', 'Accounts')} <span class="muted">· ${accs.length}</span></h2>
-      <span class="seg sm-seg" role="group" aria-label="${T('வரவு / செலவு காட்டுவது', 'In / out shows')}"><button class="${io === 'today' ? 'on' : ''}" data-act="home-io" data-v="today">${T('இன்று', 'Today')}</button><button class="${io === 'total' ? 'on' : ''}" data-act="home-io" data-v="total">${T('மொத்தம்', 'Total')}</button></span>
       ${book.canEdit ? `<button class="link-btn" data-act="new-account">${ic('plus', 18, 2.6)}${T('புதிது', 'New')}</button>` : ''}</div>
-    <div class="list">${accs.map(({ a, t, d }) => `
+    <div class="list">${accs.map(({ a, t }) => { const hp = book.holds.filter(h => h.acc === a.id && !h.done).reduce((n, h) => n + h.amt, 0); return `
       <button class="acc acc2" data-go="${accRoute(book, a.id)}"><span class="acc-top">${avatar(a.name)}
-        <span class="meta"><span class="name">${esc(a.name)}</span><span class="when">${t.last ? niceDate(t.last) : T('பதிவு இல்லை', 'No entries')}</span></span>
+        <span class="meta"><span class="name">${esc(a.name)}</span><span class="when">${t.last ? niceDate(t.last) : T('பதிவு இல்லை', 'No entries')}${hp ? ` · <b class="amber">${T('ஹோல்டு', 'Hold')} ${moneyAbs(hp)}</b>` : ''}</span></span>
         <span class="bal num ${t.bal < 0 ? 'out' : t.bal > 0 ? 'in' : ''}">${money(t.bal)}<small>${t.gross || t.settled ? `${T('லாபம்', 'Profit')} ${money(t.inHand)}` : T('இருப்பு', 'Balance')}</small></span></span>
-        ${accIO(d || t, io)}
-      </button>`).join('') || `<p class="muted center">${T('எதுவும் கிடைக்கவில்லை', 'Nothing found')}</p>`}</div>
+      </button>`; }).join('') || `<p class="muted center">${T('எதுவும் கிடைக்கவில்லை', 'Nothing found')}</p>`}</div>
     ${found.length ? `<div class="section-h"><h2>${T('பதிவுகள்', 'Entries')}</h2></div><div class="entries">${found.map(e => entryRow(book, e, null, true)).join('')}</div>` : ''}`;
-}
-function accIO(x, io) {
-  const dif = x.inn - x.out, lbl = io === 'today' ? [T('இன்று வரவு', 'In today'), T('இன்று செலவு', 'Out today')] : [T('மொத்த வரவு', 'Total in'), T('மொத்த செலவு', 'Total out')];
-  return `<span class="acc-io"><span><small><i class="dot in"></i>${lbl[0]}</small><b class="num in">${moneyAbs(x.inn)}</b></span><span class="mid"><small>${T('வித்தியாசம்', 'Difference')}</small><b class="num ${dif < 0 ? 'out' : ''}">${money(dif)}</b></span><span class="r"><small><i class="dot out"></i>${lbl[1]}</small><b class="num out">${moneyAbs(x.out)}</b></span></span>`;
 }
 const previewNote = () => `<div class="row card mb12 rounded"><span class="ic amber">${ic('info')}</span><span class="tx"><b>${T('இணைய link பதிப்பு', 'Web link version')}</b><small>${T('இங்கே தனிக் கணக்கு, கணக்கு விவரங்கள் வேலை செய்யும். குழுக் கணக்கு (Online), PDF — Android ஆப்பில் (மேலும் → APK).', 'Personal book and Account Details work here. Online groups and PDF work in the Android app (More → APK).')}</small></span></div>`;
 export const roleName = r => ({ admin: T('நிர்வாகி', 'Admin'), editor: T('திருத்துபவர்', 'Editor'), commenter: T('கருத்திடுபவர்', 'Commenter'), viewer: T('பார்வையாளர்', 'Viewer') }[r] || r || '');
 
 /* ---------------- Profit card (old app: profit, payable commission, settlement, in hand) ---------------- */
-function profitCard(book, a, t) {
+function profitCard(book, a, t, all) {
   const r = accRates(a), pct = v => (v / 100).toFixed(2).replace(/\.?0+$/, '') + '%';
   const rates = [[r.inProfit, T('வரவு லாபம்', 'In profit')], [r.outProfit, T('செலவு லாபம்', 'Out profit')], [r.inComm, T('வரவு கமிஷன்', 'In commission')], [r.outComm, T('செலவு கமிஷன்', 'Out commission')]].filter(x => x[0]);
   const line = (label, v, cls, strong) => `<div class="pc-row ${strong ? 'strong' : ''}"><span>${label}</span><b class="num ${cls || ''}">${money(v)}</b></div>`;
@@ -102,7 +96,9 @@ function profitCard(book, a, t) {
     ${t.comm ? line(T('நிகர லாபம்', 'Net profit'), t.profit, '', true) : ''}
     ${t.settled ? line(T('− லாபத்திலிருந்து எடுத்தது', '− Taken from profit'), -t.settled, 'amber') : ''}
     ${line(T('கையிருப்பு லாபம்', 'Profit in hand'), t.inHand, t.inHand < 0 ? 'out' : 'in', true)}
-    ${t.paid ? `<p class="note">${T('கமிஷன் செலுத்தியது', 'Commission paid')} ${money(t.paid)}</p>` : ''}
+    ${t.paid ? line(T('கமிஷன் செலுத்தியது', 'Commission paid'), t.paid, '') + line(T('கமிஷன் மீதம்', 'Commission due'), t.comm - t.paid, 'out') : ''}
+    ${!all ? (() => { const ever = accountTotals(book, a); return `<div class="pc-row muted-row"><span>${T('இதுவரை மொத்த கையிருப்பு லாபம்', 'Profit in hand, all time')}</span><b class="num">${money(ever.inHand)}</b></div>`; })() : ''}
+    ${(() => { const st = t.rows.filter(r => isSettle(r.e)); return st.length ? `<details class="pc-settle"><summary>${TP('எடுத்தவை {n} · {a}', 'Taken {n} times · {a}', { n: st.length, a: moneyAbs(t.settled) })}</summary>${st.slice().reverse().map(r => `<button class="hl" data-act="edit-entry" data-id="${esc(r.e.id)}"><span class="tx"><b>${esc(r.e.note || T('லாபத்திலிருந்து எடுத்தது', 'Taken from profit'))}</b><small>${esc(niceDate(r.e.date))}</small></span><b class="num amber">−${moneyAbs(r.e.amt)}</b></button>`).join('')}</details>` : ''; })()}
     ${book.canEdit && !a.locked ? `<button class="btn ghost sm block mt8" data-act="settle-new" data-acc="${esc(a.id)}">${ic('coin', 18)}${T('லாபத்திலிருந்து எடு (Settle)', 'Take from profit (Settle)')}</button>` : ''}
   </section>`;
 }
@@ -133,31 +129,63 @@ export function settleSheet(ctx, book, a, edit) {
 /* ---------------- Account ---------------- */
 export function viewAccount(ctx, book, a) {
   const [from, to] = periodRange(ctx.ui.period, ctx.ui.custom);
-  const t = accountTotals(book, a, from, to);
+  const t = accountTotals(book, a, from, to), all = ctx.ui.period === 'all';
   const groups = new Map();
   t.rows.slice().reverse().forEach(r => { if (!groups.has(r.e.date)) groups.set(r.e.date, []); groups.get(r.e.date).push(r); });
   const hasProfit = !!(t.gross || t.comm || t.settled || hasRates(a));
+  const perName = (PERIODS().find(([k]) => k === ctx.ui.period) || ['', ''])[1];
+  const rangeTxt = from || to ? (from === to ? niceDate(from) : `${niceDate(from) || '…'} – ${niceDate(to) || '…'}`) : T('தொடக்கம் முதல் இன்று வரை', 'From the start until today');
+  const holds = book.holds.filter(h => h.acc === a.id);
   return `<div class="topbar"><button class="icon-btn" data-go="${book.prefix.replace(/-$/, '')}" aria-label="${T('பின்', 'Back')}">${ic('back')}</button>
     <h1>${esc(a.name)}${a.phone ? `<span class="sub">${esc(a.phone)}</span>` : book.kind === 'group' ? `<span class="sub line-blue">${esc(book.name)}</span>` : ''}</h1>
     <button class="icon-btn" data-act="acc-menu" data-id="${esc(a.id)}" aria-label="${T('விருப்பங்கள்', 'Options')}">${ic('dots', 22, 3)}</button></div>
+    <button class="per-btn card" data-act="aper-pick"><span class="ic">${ic('cal', 18)}</span><span class="tx"><b>${esc(perName)}</b><small>${esc(rangeTxt)}</small></span>${ic('chev', 18)}</button>
     <section class="hero ${book.kind === 'group' ? 'hero-blue' : ''}">
-      <div class="label">${ctx.ui.period === 'all' ? T('இருப்பு', 'Balance') : T('முடிவு இருப்பு', 'Closing balance')}</div>
+      <div class="label">${all ? T('இருப்பு (இதுவரை மொத்தம்)', 'Balance (total until now)') : T('முடிவு இருப்பு', 'Closing balance')}</div>
       <div class="big num">${money(t.bal)}</div>
-      <div class="pills">
-        <div class="pill"><small><i class="dot in"></i>${T('வரவு', 'In')}</small><b class="num">${money(t.inn)}</b></div>
-        <div class="pill"><small><i class="dot out"></i>${T('செலவு', 'Out')}</small><b class="num">${money(t.out)}</b></div>
-      </div>
-      ${t.open ? `<div class="hero-foot"><span>${T('தொடக்க இருப்பு', 'Opening')} ${money(t.open)}</span></div>` : ''}
+      <div class="flow num">${!all || t.open ? `<span><small>${T('தொடக்கம்', 'Opening')}</small>${money(t.open)}</span><i>+</i>` : ''}<span><small>${T('வரவு', 'In')}</small>${moneyAbs(t.inn)}</span><i>−</i><span><small>${T('செலவு', 'Out')}</small>${moneyAbs(t.out)}</span><i>=</i><span><small>${T('இருப்பு', 'Balance')}</small>${money(t.bal)}</span></div>
     </section>
-    ${hasProfit ? profitCard(book, a, t) : ''}
-    ${periodChips(ctx.ui.period, 'acc')}${ctx.ui.period === 'custom' ? customDates(ctx.ui.custom, 'acc') : ''}
-    ${t.rows.length ? [...groups].map(([d, rows]) => {
+    ${hasProfit ? profitCard(book, a, t, all) : ''}
+    ${holdsCard(book, a, holds)}
+    <div class="section-h"><h2>${T('பதிவுகள்', 'Entries')} <span class="muted">· ${t.rows.length}</span></h2></div>
+    ${t.rows.length ? `<div class="card jl jl-acc">${[...groups].map(([d, rows]) => {
       const di = rows.reduce((n, r) => n + (counts(r.e) && r.e.dir > 0 ? r.e.amt : 0), 0), dout = rows.reduce((n, r) => n + (counts(r.e) && r.e.dir < 0 ? r.e.amt : 0), 0);
-      return `<div class="day-h"><span>${niceDate(d)}</span><span class="num">${di ? `<span class="in">+${moneyAbs(di)}</span> ` : ''}${dout ? `<span class="out">−${moneyAbs(dout)}</span>` : ''}</span></div>
-      <div class="entries">${rows.map(r => entryRow(book, r.e, r.bal)).join('')}</div>`;
-    }).join('') : `<div class="empty"><p>${T('இந்த காலத்தில் பதிவு இல்லை. கீழே பச்சை அல்லது சிவப்பு பட்டனை அழுத்துங்கள்.', 'No entries in this period. Tap green or red below.')}</p></div>`}`;
+      return `<div class="jday"><span>${niceDate(d)}</span><span class="num">${di ? `<span class="in">+${moneyAbs(di)}</span> ` : ''}${dout ? `<span class="out">−${moneyAbs(dout)}</span>` : ''}</span></div>${rows.map(r => jRow(book, r.e, r.bal, false)).join('')}`;
+    }).join('')}</div>` : `<div class="empty"><p>${T('இந்த காலத்தில் பதிவு இல்லை. கீழே பச்சை அல்லது சிவப்பு பட்டனை அழுத்துங்கள்.', 'No entries in this period. Tap green or red below.')}</p></div>`}`;
 }
-
+/* Hold / to receive (old app): money held or still to come; kept apart or added to In / Out / profit. */
+const HOLD_MODES = () => [['separate', T('தனியாக (இருப்பில் இல்லை)', 'Separate (not in balance)')], ['in', T('வரவில் சேர்', 'Add to In')], ['out', T('செலவில் சேர்', 'Add to Out')], ['profit', T('மொத்த லாபத்தில் சேர்', 'Add to total profit')]];
+function holdsCard(book, a, holds) {
+  if (!holds.length && !book.canEdit) return '';
+  const open = holds.filter(h => !h.done), done = holds.filter(h => h.done), sum = l => l.reduce((n, h) => n + h.amt, 0);
+  const mode = h => (HOLD_MODES().find(([k]) => k === h.mode) || ['', ''])[1];
+  const row = h => `<button class="hl ${h.done ? 'done' : ''}" data-act="hold-edit" data-id="${esc(h.id)}"><span class="tx"><b>${esc(h.name || T('ஹோல்டு', 'Hold'))}</b><small>${esc(niceDate(h.date))} · ${esc(mode(h))}${h.note ? ' · ' + esc(h.note) : ''}</small></span><b class="num amber">${moneyAbs(h.amt)}</b></button>`;
+  return `<section class="card holds-card">
+    <div class="pc-h"><b>${ic('wallet', 18)} ${T('ஹோல்டு / வர வேண்டியது', 'Hold / to receive')}</b>${open.length ? `<span class="num amber">${moneyAbs(sum(open))}</span>` : ''}</div>
+    ${open.map(row).join('') || `<p class="note mt0">${T('அட்வான்ஸ், வர வேண்டிய தொகையை இங்கே தனியாக வைக்கலாம்.', 'Keep advances and money still to come here, apart from the balance.')}</p>`}
+    ${done.length ? `<details class="hl-done"><summary>${TP('முடிந்தவை {n} · {a}', 'Done {n} · {a}', { n: done.length, a: moneyAbs(sum(done)) })}</summary>${done.map(row).join('')}</details>` : ''}
+    ${book.canEdit && !a.locked ? `<button class="btn ghost sm block mt8" data-act="hold-new" data-acc="${esc(a.id)}">${ic('plus', 18, 2.6)}${T('ஹோல்டு சேர்', 'Add hold')}</button>` : ''}
+  </section>`;
+}
+export function holdSheet(ctx, book, a, edit) {
+  const f = edit ? Object.assign({}, edit) : { id: uid(), acc: a.id, name: '', amt: 0, date: today(), note: '', done: false, mode: 'separate' };
+  const body = `<div class="field"><label for="hd-name">${T('யாரிடம் / யாரிடமிருந்து', 'Held by / to receive from')}</label><input class="input" id="hd-name" maxlength="80" value="${esc(f.name)}"></div>
+    <div class="row2"><div class="field"><label for="hd-amt">${T('தொகை ₹', 'Amount ₹')}</label><input class="input" id="hd-amt" type="number" inputmode="decimal" step="0.01" min="0" value="${f.amt ? f.amt / 100 : ''}" placeholder="0"></div>
+    <div class="field"><label for="hd-date">${T('தேதி', 'Date')}</label><input class="input" id="hd-date" type="date" value="${esc(f.date)}"></div></div>
+    <div class="field"><span class="lbl">${T('இந்தத் தொகை எங்கே?', 'Where does this amount go?')}</span><div class="hd-modes">${HOLD_MODES().map(([k, l]) => `<button type="button" class="${f.mode === k ? 'on' : ''}" data-hm="${k}">${l}</button>`).join('')}</div></div>
+    <div class="field"><label for="hd-note">${T('குறிப்பு (விருப்பம்)', 'Note (optional)')}</label><input class="input" id="hd-note" maxlength="300" value="${esc(f.note)}"></div>
+    <label class="row card rounded"><span class="tx"><b>${T('வந்துவிட்டது / முடிந்தது', 'Received / done')}</b><small>${T('நிலுவைப் பட்டியலிலிருந்து நகரும்', 'Moves out of the pending list')}</small></span><input type="checkbox" class="check24" id="hd-done" ${f.done ? 'checked' : ''}></label>
+    ${edit ? `<button class="btn danger block mt14" id="hd-del">${ic('trash', 20)}${T('நீக்கு', 'Delete')}</button>` : ''}`;
+  openSheet(edit ? T('ஹோல்டு திருத்து', 'Edit hold') : T('ஹோல்டு சேர்', 'Add hold'), body, `<button class="btn block" id="hd-save">${ic('check', 22, 3)}${T('சேமி', 'Save')}</button>`);
+  document.querySelectorAll('#sheet-root [data-hm]').forEach(b => b.onclick = () => { f.mode = b.dataset.hm; document.querySelectorAll('#sheet-root [data-hm]').forEach(x => x.classList.toggle('on', x === b)); });
+  $('#hd-save').onclick = async () => {
+    const amt = Math.round(Number($('#hd-amt').value) * 100);
+    if (!(amt > 0)) return toast(T('தொகையை அடிக்கவும்', 'Please type the amount'));
+    Object.assign(f, { name: $('#hd-name').value.trim(), amt, date: $('#hd-date').value || today(), note: $('#hd-note').value.trim(), done: $('#hd-done').checked });
+    try { await book.putHold(f); closeSheet(); ctx.render(); toast(T('சேமிக்கப்பட்டது', 'Saved')); } catch (e) { toast(T('சேமிக்க முடியவில்லை', 'Could not save') + ' ' + (e.message || '')); }
+  };
+  const del = $('#hd-del'); if (del) del.onclick = async () => { if (!(await confirmBox(T('நீக்கவா?', 'Delete?'), T('இந்த ஹோல்டும் அதனுடன் இணைந்த பதிவும் நீக்கப்படும்.', 'This hold and its linked record will be deleted.'), T('நீக்கு', 'Delete'), true))) return; await book.deleteHold(f.id); ctx.render(); };
+}
 /* ---------------- Report ---------------- */
 /* Report account selection (per book): null = every account. */
 export function repIds(ctx, book) {
@@ -208,6 +236,7 @@ export function viewReport(ctx, book) {
       <div class="stat"><small>${T('வித்தியாசம் (வரவு − செலவு)', 'Difference (in − out)')}</small><b class="num ${tot.inn - tot.out < 0 ? 'out' : 'in'}">${money(tot.inn - tot.out)}</b></div>
       <div class="stat"><small>${T('முடிவு இருப்பு', 'Closing balance')}</small><b class="num">${money(tot.bal)}</b></div>
       ${pStats.map(([k, label, cls], i) => st(label, tot[k], k === 'inHand' && tot.inHand < 0 ? 'out' : cls, i === pStats.length - 1 && pStats.length % 2)).join('')}
+      ${(() => { const hp = book.holds.filter(h => !h.done && (!ids || ids.includes(h.acc))).reduce((n, h) => n + h.amt, 0); return hp ? st(T('ஹோல்டு / வர வேண்டியது (நிலுவை)', 'Hold / to receive (pending)'), hp, 'amber', true) : ''; })()}
     </div>
     <div class="card chart">${chart(book, from, to, ids)}</div>
     <div class="row2 mt12"><button class="btn" data-act="pdf">${ic('pdf', 20)}PDF</button><button class="btn ghost" data-act="csv">${ic('excel', 20)}Excel</button></div>
@@ -273,8 +302,8 @@ function jRow(book, e, bal, showAcc) {
     <span class="ja ${st ? 'amber' : e.dir > 0 ? 'in' : 'out'}">${st ? '−' : e.dir > 0 ? '+' : '−'}${cmF(e.amt)}<small>${cmF(bal) || '0'}</small></span></button>`;
 }
 /* Period chooser: quick ranges as small boxes, and a hotel-booking style calendar for any range. */
-function periodPicker(ctx) {
-  const cur = ctx.ui.rPeriod, c = ctx.ui.rCustom || ['', ''];
+function periodPicker(ctx, which) {
+  const A = which === 'acc', cur = A ? ctx.ui.period : ctx.ui.rPeriod, c = (A ? ctx.ui.custom : ctx.ui.rCustom) || ['', ''];
   const quick = PERIODS().filter(([k]) => k !== 'custom');
   const st = { a: c[0] || '', b: c[1] || '', m: (c[0] || today()).slice(0, 7) };
   openSheet(T('எந்த தேதிகள்?', 'Which dates?'), `<div class="pp-grid">${quick.map(([k, l]) => { const r = periodRange(k, c);
@@ -299,8 +328,9 @@ function periodPicker(ctx) {
     $('#pp-cal').querySelectorAll('[data-m]').forEach(b => b.onclick = () => { const dt = new Date(y, m - 1 + Number(b.dataset.m), 1); st.m = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`; draw(); });
   };
   draw();
-  document.querySelectorAll('#sheet-root [data-e=per]').forEach(b => b.onclick = () => { ctx.ui.rPeriod = b.dataset.k; closeSheet(); ctx.render(); });
-  $('#pp-go').onclick = () => { ctx.ui.rPeriod = 'custom'; ctx.ui.rCustom = [st.a, st.b || st.a]; closeSheet(); ctx.render(); };
+  const set = (k, cu) => { if (A) { ctx.ui.period = k; if (cu) ctx.ui.custom = cu; } else { ctx.ui.rPeriod = k; if (cu) ctx.ui.rCustom = cu; } closeSheet(); ctx.render(); };
+  document.querySelectorAll('#sheet-root [data-e=per]').forEach(b => b.onclick = () => set(b.dataset.k));
+  $('#pp-go').onclick = () => set('custom', [st.a, st.b || st.a]);
 }
 if (typeof document !== 'undefined') document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-rp-go]'); if (!b) return; const tr = b.closest('details').querySelector('.rp-track'), p = tr.querySelector(`[data-k="${CSS.escape(b.dataset.rpGo)}"]`); if (p) tr.scrollTo({ left: p.offsetLeft - tr.offsetLeft, behavior: 'smooth' }); b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); });
 if (typeof document !== 'undefined') document.addEventListener('toggle', e => { const k = e.target && e.target.dataset && e.target.dataset.keep; if (k) ls.set(k, e.target.open ? '1' : ''); }, true);
@@ -639,16 +669,22 @@ export function printReport(ctx, book, accIds, from, to, title, prefs) {
     for (const { a, t } of per) {
       const cols = [
         ['inn', T('வரவு', 'In'), (e) => e.dir > 0 && !isSettle(e) ? money(e.amt) : '', 'pr-in', t.inn], ['out', T('செலவு', 'Out'), (e) => e.dir < 0 && !isSettle(e) ? money(e.amt) : '', 'pr-out', t.out],
-        ['gross', T('லாபம்', 'Profit'), (e) => isSettle(e) ? '−' + moneyAbs(e.amt) : m0((e.profit || 0) + (e.comm || 0)), '', t.gross - t.settled], ['comm', T('கமிஷன்', 'Commission'), (e) => m0(e.comm), 'pr-out', t.comm],
+        ['gIn', L.gIn, e => !isSettle(e) && e.dir > 0 ? m0((e.profit || 0) + (e.comm || 0)) : '', '', t.gIn], ['gOut', L.gOut, e => !isSettle(e) && e.dir < 0 ? m0((e.profit || 0) + (e.comm || 0)) : '', '', t.gOut],
+        ['cIn', L.cIn, e => e.dir > 0 ? m0(e.comm) : '', 'pr-out', t.cIn], ['cOut', L.cOut, e => e.dir < 0 && !isSettle(e) ? m0(e.comm) : '', 'pr-out', t.cOut],
+        ['net', L.net, e => isSettle(e) ? '' : m0(e.profit), 'pr-in', t.profit], ['settled', T('எடுத்தது', 'Taken'), e => isSettle(e) ? money(e.amt) : '', '', t.settled],
         ['bal', T('இருப்பு', 'Balance'), (e, bal) => money(bal), '', t.bal]
       ].filter(c => C[c[0]]);
       html += `<h2 class="pr-acc">${esc(a.name)} <small>${C.open ? '· ' + T('தொடக்கம்', 'Opening') + ' ' + money(t.open) + ' ' : ''}· ${T('முடிவு', 'Closing')} ${money(t.bal)}</small></h2>
-      <table class="pr-t"><thead><tr><th>${T('தேதி', 'Date')}</th>${C.note ? `<th>${T('விவரம்', 'Details')}</th>` : ''}${cols.map(c => `<th class="r">${c[1]}</th>`).join('')}</tr></thead><tbody>
+      <table class="pr-t ${cols.length > 6 ? 'pr-wide pr-wide1' : ''}"><thead><tr><th>${T('தேதி', 'Date')}</th>${C.note ? `<th>${T('விவரம்', 'Details')}</th>` : ''}${cols.map(c => `<th class="r">${c[1]}</th>`).join('')}</tr></thead><tbody>
       ${t.rows.map(({ e, bal }) => `<tr><td>${dmy(e.date)}${e.time && e.time !== '00:00' ? ' <small>' + niceTime(e.time) + '</small>' : ''}</td>${C.note ? `<td>${isSettle(e) ? esc(e.note || '') + ' <small>(' + L.settled + ')</small>' : esc([e.note, e.party, e.cat].filter(Boolean).join(' · ') || '—') + (!counts(e) ? ' <small>(' + (e.pending ? T('நிலுவை', 'pending') : T('இருப்பில் இல்லை', 'not in balance')) + ')</small>' : '')}</td>` : ''}${cols.map(c => `<td class="r ${c[3]}">${c[2](e, bal)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="8">${T('பதிவு இல்லை', 'No entries')}</td></tr>`}
       <tr class="pr-total"><td>${C.note ? '' : `<b>${T('மொத்தம்', 'Total')}</b>`}</td>${C.note ? `<td><b>${T('மொத்தம்', 'Total')}</b></td>` : ''}${cols.map(c => `<td class="r ${c[3]}"><b>${money(c[4])}</b></td>`).join('')}</tr></tbody></table>`;
       html += endBoxes(t, T('மொத்தம்', 'Total') + ' · ' + a.name);
     }
   }
+  const hl = (book.holds || []).filter(h => !accIds || accIds.includes(h.acc));
+  if (hl.length) html += `<div class="pr-end"><h3>${T('ஹோல்டு / வர வேண்டியது', 'Hold / to receive')}</h3><table class="pr-t"><thead><tr><th>${T('தேதி', 'Date')}</th>${accs.length > 1 ? `<th>${T('கணக்கு', 'Account')}</th>` : ''}<th>${T('யாரிடம்', 'Held by')}</th><th>${T('எங்கே', 'Where')}</th><th>${T('நிலை', 'Status')}</th><th class="r">${T('தொகை', 'Amount')}</th></tr></thead><tbody>
+    ${hl.map(h => `<tr><td>${dmy(h.date)}</td>${accs.length > 1 ? `<td>${esc((book.account(h.acc) || {}).name || '')}</td>` : ''}<td>${esc(h.name || '')}${h.note ? ' <small>' + esc(h.note) + '</small>' : ''}</td><td>${esc((HOLD_MODES().find(([k]) => k === h.mode) || ['', ''])[1])}</td><td>${h.done ? T('முடிந்தது', 'Done') : T('நிலுவை', 'Pending')}</td><td class="r"><b>${money(h.amt)}</b></td></tr>`).join('')}
+    <tr class="pr-total"><td colspan="${accs.length > 1 ? 5 : 4}"><b>${T('நிலுவை மொத்தம்', 'Pending total')}</b></td><td class="r"><b>${money(hl.filter(h => !h.done).reduce((n, h) => n + h.amt, 0))}</b></td></tr></tbody></table></div>`;
   html += `<p class="pr-f">Team Ledger ${VERSION}</p>`;
   const root = $('#print-root');
   root.innerHTML = `<div class="pr-page">${html}</div>`;
@@ -686,7 +722,7 @@ export function csvReport(book, accIds, from, to) {
 /* Shared action handlers for ledger screens. */
 export const ledgerActions = {
   'new-entry': (ctx, b) => { const book = ctx.book(); if (!book.canEdit) return toast(T('பார்க்க மட்டும் அனுமதி', 'View-only access')); entrySheet(ctx, book, { dir: Number(b.dataset.dir), acc: b.dataset.acc || '' }); },
-  'edit-entry': (ctx, b) => { const book = ctx.book(), e = book.entries.find(x => x.id === b.dataset.id); if (e && isSettle(e)) { if (!book.canEdit) return toast(T('பார்க்க மட்டும் அனுமதி', 'View-only access')); return settleSheet(ctx, book, book.account(e.acc), e); } entrySheet(ctx, book, { id: b.dataset.id }); },
+  'edit-entry': (ctx, b) => { const book = ctx.book(), e = book.entries.find(x => x.id === b.dataset.id); if (e && e.holdId) { const h = book.holds.find(x => x.id === e.holdId); if (h) return book.canEdit ? holdSheet(ctx, book, book.account(h.acc), h) : toast(T('பார்க்க மட்டும் அனுமதி', 'View-only access')); } if (e && isSettle(e)) { if (!book.canEdit) return toast(T('பார்க்க மட்டும் அனுமதி', 'View-only access')); return settleSheet(ctx, book, book.account(e.acc), e); } entrySheet(ctx, book, { id: b.dataset.id }); },
   'settle-new': (ctx, b) => { const book = ctx.book(); settleSheet(ctx, book, book.account(b.dataset.acc)); },
   'new-account': ctx => accountSheet(ctx, ctx.book(), null),
   'acc-menu': (ctx, b) => accountMenu(ctx, ctx.book(), ctx.book().account(b.dataset.id)),
@@ -698,7 +734,9 @@ export const ledgerActions = {
     if (!(await confirmBox(T('கடைசியாக இறக்கியதை நீக்கவா?', 'Remove the last import?'), TP('{f} கோப்பிலிருந்து வந்த {n} பதிவுகள் நீக்கப்படும்.', '{n} entries from {f} will be removed.', { n: last.ids.length, f: last.name || '—' }), T('நீக்கு', 'Remove'), true))) return;
     await book.deleteEntries(last.ids); ctx.render(); toast(T('நீக்கப்பட்டது', 'Removed'));
   },
-  'home-io': (ctx, b) => { ls.set('tl4-home-io', b.dataset.v); ctx.render(); },
+  'aper-pick': ctx => periodPicker(ctx, 'acc'),
+  'hold-new': (ctx, b) => { const book = ctx.book(); holdSheet(ctx, book, book.account(b.dataset.acc)); },
+  'hold-edit': (ctx, b) => { const book = ctx.book(), h = book.holds.find(x => x.id === b.dataset.id); if (!h) return; if (!book.canEdit) return toast(T('பார்க்க மட்டும் அனுமதி', 'View-only access')); holdSheet(ctx, book, book.account(h.acc), h); },
   'rper-pick': ctx => periodPicker(ctx),
   'acc-share': (ctx, b) => { closeSheet(true); const book = ctx.book(); shareText(accountShareText(book, book.account(b.dataset.id))); },
   'search': ctx => { ctx.ui.searchOpen = true; ctx.ui.focusSearch = true; ctx.render(); },

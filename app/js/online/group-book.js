@@ -13,7 +13,7 @@ function editableSource(ev) {
 }
 
 export function createGroupBook(groups) {
-  let v3 = null, view = { accounts: [], entries: [], files: {} };
+  let v3 = null, view = { accounts: [], entries: [], files: {}, holds: [] };
   function rebuild() {
     v3 = toPersonal(groups.current.ledger);
     const c = convert(clone(v3), uuid);
@@ -31,7 +31,9 @@ export function createGroupBook(groups) {
     }
     const accMap = new Map(v3.accounts.map(a => [a.id, a]));
     c.accounts.forEach(a => { const src = accMap.get(a.id); a.locked = !!(src && src.kind === 'profit'); });
-    view = { accounts: c.accounts, entries: c.entries, files };
+    const hv = new Map((c.holds || []).map(h => [h.entryId, h.id]));
+    for (const e of c.entries) if (hv.has(e.id)) { e.holdId = hv.get(e.id); e.locked = false; }
+    view = { accounts: c.accounts, entries: c.entries, files, holds: c.holds || [] };
   }
   function applyEntry(next, rec, newFiles) {
       const acc = next.accounts.find(a => a.id === rec.acc);
@@ -89,6 +91,28 @@ export function createGroupBook(groups) {
     async reload() { await groups.load(groups.current.row.id); rebuild(); return book; },
     account: id => view.accounts.find(a => a.id === id),
     getFile: async meta => view.files[meta.id] || null,
+    get holds() { return view.holds; },
+    async putHold(h) {
+      const next = clone(v3); next.holds = Array.isArray(next.holds) ? next.holds : [];
+      let src = next.holds.find(x => x.id === h.id);
+      if (!src) { src = { id: h.id }; next.holds.push(src); }
+      const oldEntry = src.ledgerEntryId;
+      Object.assign(src, { accountId: h.acc, name: (h.name || '').slice(0, 80), amount: h.amt, date: h.date, note: (h.note || '').slice(0, 2000), done: !!h.done });
+      if (h.mode === 'separate') { delete src.ledgerEntryId; delete src.ledgerEffect; delete src.holdMode; if (oldEntry) next.entries = next.entries.filter(e => e.id !== oldEntry); }
+      else {
+        const id = oldEntry || uuid(), eff = h.mode === 'out' ? -1 : 1;
+        Object.assign(src, { ledgerEntryId: id, ledgerEffect: eff, holdMode: h.mode });
+        const prev = next.entries.find(e => e.id === id);
+        const ev = { id, accountId: h.acc, partyId: null, party: src.name, typeId: null, typeName: 'Hold / To receive', holdMode: h.mode, effect: eff, date: h.date, time: '00:00', amount: h.amt, rate: 0, cost: 0, movement: 'debt', note: src.note, created: prev ? prev.created : Date.now(), attachments: prev ? prev.attachments || [] : [] };
+        if (prev) Object.keys(prev).forEach(k => delete prev[k]), Object.assign(prev, ev); else next.entries.push(ev);
+      }
+      await commit(next); return h;
+    },
+    async deleteHold(id) {
+      const next = clone(v3), h = (next.holds || []).find(x => x.id === id); if (!h) return;
+      next.holds = next.holds.filter(x => x.id !== id); if (h.ledgerEntryId) next.entries = next.entries.filter(e => e.id !== h.ledgerEntryId);
+      await commit(next);
+    },
     async putAccount(a) {
       const next = clone(v3); let src = next.accounts.find(x => x.id === a.id);
       if (!src) { src = { id: a.id || uuid(), name: a.name, opening: a.opening || 0, kind: 'ledger', flow: 'general', profitRate: 0, created: Date.now() }; next.accounts.push(src); a.id = src.id; }

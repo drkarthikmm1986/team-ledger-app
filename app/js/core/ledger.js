@@ -19,7 +19,7 @@ export function accountTotals(book, acc, from, to) {
     rows.push({ e, bal });
   }
   if (!from) open = acc.opening || 0;
-  return { open, inn, out, bal, profit, comm, paid, settled, inHand: profit - settled, gross: profit + comm, gIn, gOut, cIn, cOut, rows, last: list.length ? list[list.length - 1].date : '' };
+  return { open, inn, out, bal, profit, comm, paid, settled, inHand: profit - settled, gross: profit + comm, gIn, gOut, cIn, cOut, due: comm - paid, rows, last: list.length ? list[list.length - 1].date : '' };
 }
 export function allTotals(book, from, to, accIds) {
   const t = { open: 0, inn: 0, out: 0, bal: 0, profit: 0, comm: 0, paid: 0, settled: 0, gIn: 0, gOut: 0, cIn: 0, cOut: 0 };
@@ -29,7 +29,7 @@ export function allTotals(book, from, to, accIds) {
     for (const k of ['open', 'gIn', 'gOut', 'cIn', 'cOut']) t[k] += x[k];
     t.inn += x.inn; t.out += x.out; t.bal += x.bal; t.profit += x.profit; t.comm += x.comm; t.paid += x.paid; t.settled += x.settled;
   }
-  t.gross = t.profit + t.comm; t.inHand = t.profit - t.settled;
+  t.gross = t.profit + t.comm; t.inHand = t.profit - t.settled; t.due = t.comm - t.paid;
   return t;
 }
 /* Account rates, exactly like the old Team Ledger finance block:

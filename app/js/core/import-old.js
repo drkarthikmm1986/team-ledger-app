@@ -103,6 +103,7 @@ function convert(old, makeId) {
       amt: eff !== 0 ? Math.abs(eff) : e.amount,
       profit: a.profit, comm: a.payable, commPaid: a.paid, files: attach
     });
+    if (e.finance && e.finance.enabled && e.finance.payment) { rec.commPay = true; rec.cat = rec.cat || 'Commission paid'; }
     if (eff === 0) rec.noBal = true;
     if (e.holdMode) rec.cat = rec.cat || 'Hold';
     if (e.movement === 'fund_use' || e.movement === 'fund_return') rec.cat = rec.cat || (e.movement === 'fund_use' ? 'Fund use' : 'Fund return');

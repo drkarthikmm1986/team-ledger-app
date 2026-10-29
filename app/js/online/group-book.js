@@ -9,7 +9,7 @@ import { accRates } from '../core/ledger.js';
 const clone = v => structuredClone(v);
 
 function editableSource(ev) {
-  return !!ev && !ev.flowAmounts && !ev.holdMode && (ev.movement === undefined || ev.movement === 'debt') && ev.amount > 0 && !(ev.finance && ev.finance.payment);
+  return !!ev && !ev.flowAmounts && !ev.holdMode && (ev.movement === undefined || ev.movement === 'debt') && ev.amount > 0;
 }
 
 export function createGroupBook(groups) {
@@ -58,6 +58,9 @@ export function createGroupBook(groups) {
           ev.finance = { ...(f0 || financeFor(0, 0)), inRate: r, outRate: r, commissionRate: c, outCommissionRate: c, source: 'entry' };
         } else { ev.rate = rec.rate > 0 ? rec.rate : 0; ev.profitDisabled = rec.rate === 0; }
       }
+      // commission payment (old app finance.payment): the whole amount is paid commission
+      if (rec.commPay) { ev.finance = { version: 1, enabled: true, include: true, inRate: 0, outRate: 0, commissionRate: 0, outCommissionRate: 0, payment: true, paid: 0, source: 'entry' }; ev.typeName = 'Commission paid'; ev.rate = 0; }
+      else if (ev.finance && ev.finance.payment) { if (acc.finance && acc.finance.enabled) ev.finance = { ...clone(acc.finance), payment: false, paid: 0, source: 'account' }; else delete ev.finance; if (ev.typeName === 'Commission paid') ev.typeName = rec.dir > 0 ? 'Money in' : 'Money out'; }
       ev.rate = Number.isSafeInteger(ev.rate) ? ev.rate : 0; ev.cost = Math.round(ev.amount * ev.rate / 1e4); // old app rule: cost = amount × rate
       const added = new Map((newFiles || []).map(f => [f.id, f.data]));
       ev.attachments = (rec.files || []).map(m => { const old = (ev.attachments || []).find(a => a.id === m.id); if (old) return old; const d = added.get(m.id); return d ? { id: m.id, name: (d.name || 'file').slice(0, 80), mime: d.mime, data: d.data } : null; }).filter(Boolean).slice(0, 5);

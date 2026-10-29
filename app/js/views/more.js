@@ -19,6 +19,7 @@ export function viewMore(ctx) {
       <button class="row" data-act="lang-pick"><span class="ic">${ic('lang')}</span><span class="tx"><b>${T('மொழி', 'Language')}</b><small>${esc((LANGS.find(l => l[0] === lang()) || LANGS[0])[1])}</small></span><span class="end">${ic('chev', 18)}</span></button>
       <div class="row"><span class="ic">${ic('sun')}</span><span class="tx"><b>${T('தோற்றம்', 'Look')}</b></span>
         <span class="seg"><button class="${theme === 'auto' ? 'on' : ''}" data-act="theme" data-v="auto">${T('தானாக', 'Auto')}</button><button class="${theme === 'light' ? 'on' : ''}" data-act="theme" data-v="light" aria-label="light">☀</button><button class="${theme === 'dark' ? 'on' : ''}" data-act="theme" data-v="dark" aria-label="dark">☾</button></span></div>
+      <label class="row"><span class="ic">${ic('cal')}</span><span class="tx"><b>${T('பதிவுகளில் நேரம் காட்டு', 'Show time on entries')}</b><small>${T('தேதி மட்டும் போதுமென்றால் டிக் எடுக்கவும்', 'Leave it off to show only the date')}</small></span><input type="checkbox" class="check24" data-act="show-time" ${ls.get('tl4-show-time', '') === '1' ? 'checked' : ''}></label>
       <button class="row" data-act="lock"><span class="ic">${ic('lock')}</span><span class="tx"><b>${T('ஆப் பூட்டு', 'App lock')}</b><small>${T('4 இலக்க PIN — ஆப் திறக்கும்போது கேட்கும்', '4-digit PIN when the app opens')}</small></span><span class="end">${lockOn ? T('இயக்கம்', 'ON') : T('இல்லை', 'OFF')}</span></button>
     </div>
     ${ctx.preview && CFG.apkZip ? `<div class="section-h"><h2>${T('Android ஆப்', 'Android app')}</h2></div><div class="menu"><button class="row" data-act="get-apk"><span class="ic green">${ic('save')}</span><span class="tx"><b>${T('Android ஆப் பதிவிறக்கு (ZIP)', 'Download Android app (ZIP)')}</b><small>${T('ZIP-ஐ Files-ல் திறந்து Extract → APK → Install. குழுக் கணக்கு, PDF உட்பட எல்லாம்.', 'Open the ZIP in Files → Extract → APK → Install. Includes Online groups and PDF.')}</small></span></button></div>` : ''}
@@ -148,6 +149,7 @@ export const moreActions = {
   },
   'lang-pick': () => openSheet(T('மொழி', 'Language'), `<div class="lang-grid">${LANGS.map(([c, n, e]) => `<button class="lang-opt ${c === lang() ? 'on' : ''}" data-act="lang" data-v="${c}" lang="${c}"><b>${esc(n)}</b><small>${esc(e)}</small></button>`).join('')}</div>`),
   lang: async (ctx, b) => { closeSheet(true); await setLang(b.dataset.v); ctx.render(); },
+  'show-time': (ctx, b) => { ls.set('tl4-show-time', b.checked ? '1' : ''); ctx.render(); },
   theme: (ctx, b) => { ls.set('tl4-theme', b.dataset.v); applyTheme(); ctx.render(); },
   lock: ctx => toggleLock(ctx),
   backup: ctx => doBackup(ctx),

@@ -541,3 +541,26 @@ textarea.input{height:auto;min-height:80px;padding:12px 14px;resize:vertical}
 .jl-acc{padding:0 8px 6px}
 .jday{display:flex;justify-content:space-between;align-items:center;padding:8px 6px 4px;font-size:12px;font-weight:800;color:var(--muted);border-bottom:1px solid var(--line)} .jday .num{font-size:12px}
 .jl-acc .jr{grid-template-columns:38px 1fr auto auto}
+/* ---- 4.2.1: account summary boxes, lists, 2-line journal ---- */
+.profit-card .pbox{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.pbox .pb{background:var(--bg2);border-radius:12px;padding:8px 10px;min-width:0;border:1px solid transparent}
+.pbox .pb small{display:block;font-size:11.5px;color:var(--muted);font-weight:650;line-height:1.2}
+.pbox .pb b{display:block;font-size:16px;font-weight:800;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pbox .pb.strong{border-color:var(--line);background:var(--card)} .pbox .pb.big b{font-size:19px}
+.pbox .pb.wide{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center} .pbox .pb.wide b{margin:0}
+.mlist{margin-top:12px;padding:12px 14px} .mlist .hl .jd{font-size:12px;font-weight:750;width:44px;flex:none;line-height:1.1} .mlist .hl .jd small{display:block;font-size:9.5px;color:var(--muted)}
+.jr{grid-template-columns:42px 1fr!important;gap:8px;min-height:0;padding:5px 4px}
+.jr .jm{display:flex;flex-direction:column;min-width:0;gap:2px}
+.jr .j1{display:flex;align-items:baseline;gap:8px;min-width:0} .jr .jn{flex:1;font-size:13px} .jr .ja{font-size:13.5px;font-weight:800;white-space:nowrap;min-width:0;display:block}
+.jr .j2{display:flex;flex-wrap:wrap;gap:3px 8px;font-size:10.5px;line-height:1.2}
+.jr .j2 i{font-style:normal;font-weight:700;white-space:nowrap}
+.jr .j2 .c-p{color:var(--in)} .jr .j2 .c-c{color:var(--out)} .jr .j2 .c-pd{color:var(--blue)} .jr .j2 .c-s{color:var(--amber)} .jr .j2 .c-n,.jr .j2 .c-b{color:var(--muted);font-weight:600}
+.jl-acc .jr{grid-template-columns:42px 1fr!important}
+.rp-h{align-items:center} .rp-t{flex:1;display:flex;flex-direction:column;min-width:0;text-align:center} .rp-t small{margin:0!important}
+.rp-nav{width:30px;height:30px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--muted);display:grid;place-items:center;flex:none}
+.cp-toggle{width:100%;text-align:left;margin:0 0 12px;border:1px solid var(--line);color:inherit;font:inherit} .cp-toggle.on{border:2px solid var(--in);background:var(--in-soft)}
+
+.rt2{font-size:10.5px;letter-spacing:-.15px} .rt2 th,.rt2 td{padding:5px 2px} .rt2 .st{width:50px;padding-left:5px} .rt2 td.b{font-size:10.5px}
+.profit-card .row2 .btn{font-size:13px;padding:0 8px}
+.pr-page .pr-dif{margin:4px 0 8px;font-size:9.5pt;text-align:right}
+.pr-page .pr-t td:first-child{white-space:nowrap}

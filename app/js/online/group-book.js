@@ -32,6 +32,33 @@ export function createGroupBook(groups) {
     c.accounts.forEach(a => { const src = accMap.get(a.id); a.locked = !!(src && src.kind === 'profit'); });
     view = { accounts: c.accounts, entries: c.entries, files };
   }
+  function applyEntry(next, rec, newFiles) {
+      const acc = next.accounts.find(a => a.id === rec.acc);
+      if (!acc) throw Error('Account not found');
+      let ev = next.entries.find(e => e.id === rec.id);
+      const fresh = !ev;
+      if (fresh) {
+        ev = { id: rec.id || uuid(), accountId: rec.acc, date: rec.date, time: rec.time || '00:00', amount: rec.amt, effect: rec.dir, partyId: null, party: '', typeId: null, typeName: rec.dir > 0 ? 'Money in' : 'Money out', note: '', rate: 0, cost: 0, movement: 'debt', profitOnly: false, created: Date.now(), attachments: [] };
+        if (acc.finance && acc.finance.enabled) ev.finance = { ...clone(acc.finance), payment: false, paid: 0, source: 'account' };
+        next.entries.push(ev);
+      } else if (!editableSource(ev)) throw Error('locked');
+      ev.accountId = rec.acc; ev.amount = rec.amt; ev.effect = rec.dir; ev.date = rec.date; ev.time = rec.time || '00:00';
+      ev.note = (rec.note || '').slice(0, 2000);
+      if (rec.imp && fresh) ev.importInfo = { batchId: rec.imp.batchId, fileName: rec.imp.fileName || '', importedAt: new Date().toISOString(), direction: rec.dir > 0 ? 'in' : 'out' };
+      if ((rec.party || '') !== (ev.party || '')) { ev.party = (rec.party || '').slice(0, 80); ev.partyId = null; }
+      if (rec.cat) ev.typeName = rec.cat.slice(0, 80);
+      if (rec.rate != null || rec.commRate != null) {
+        if ((ev.finance && ev.finance.enabled) || rec.commRate) {
+          const f0 = ev.finance && ev.finance.enabled ? ev.finance : null, out = rec.dir < 0;
+          const r = rec.rate != null ? rec.rate : f0 ? (out ? f0.outRate : f0.inRate) : acc.profitRate || 0;
+          const c = rec.commRate != null ? rec.commRate : f0 ? (out ? f0.outCommissionRate || 0 : f0.commissionRate) : 0;
+          ev.finance = { ...(f0 || financeFor(0, 0)), inRate: r, outRate: r, commissionRate: c, outCommissionRate: c, source: 'entry' };
+        } else { ev.rate = rec.rate > 0 ? rec.rate : 0; ev.profitDisabled = rec.rate === 0; }
+      }
+      ev.rate = Number.isSafeInteger(ev.rate) ? ev.rate : 0; ev.cost = Math.round(ev.amount * ev.rate / 1e4); // old app rule: cost = amount × rate
+      const added = new Map((newFiles || []).map(f => [f.id, f.data]));
+      ev.attachments = (rec.files || []).map(m => { const old = (ev.attachments || []).find(a => a.id === m.id); if (old) return old; const d = added.get(m.id); return d ? { id: m.id, name: (d.name || 'file').slice(0, 80), mime: d.mime, data: d.data } : null; }).filter(Boolean).slice(0, 5);
+  }
   async function commit(next) {
     validatePersonal(next);
     if (typeof window !== 'undefined' && window.TL_VALIDATE_V3) window.TL_VALIDATE_V3(next);
@@ -76,31 +103,14 @@ export function createGroupBook(groups) {
       if (next.profits) next.profits = next.profits.filter(p => p.accountId !== id);
       await commit(next); return null;
     },
-    async putEntry(rec, newFiles) {
-      const next = clone(v3), acc = next.accounts.find(a => a.id === rec.acc);
-      if (!acc) throw Error('Account not found');
-      let ev = next.entries.find(e => e.id === rec.id);
-      const fresh = !ev;
-      if (fresh) {
-        ev = { id: rec.id || uuid(), accountId: rec.acc, date: rec.date, time: rec.time || '00:00', amount: rec.amt, effect: rec.dir, partyId: null, party: '', typeId: null, typeName: rec.dir > 0 ? 'Money in' : 'Money out', note: '', rate: 0, cost: 0, movement: 'debt', profitOnly: false, created: Date.now(), attachments: [] };
-        if (acc.finance && acc.finance.enabled) ev.finance = { ...clone(acc.finance), payment: false, paid: 0, source: 'account' };
-        next.entries.push(ev);
-      } else if (!editableSource(ev)) throw Error('locked');
-      ev.accountId = rec.acc; ev.amount = rec.amt; ev.effect = rec.dir; ev.date = rec.date; ev.time = rec.time || '00:00';
-      ev.note = (rec.note || '').slice(0, 2000);
-      if ((rec.party || '') !== (ev.party || '')) { ev.party = (rec.party || '').slice(0, 80); ev.partyId = null; }
-      if (rec.cat) ev.typeName = rec.cat.slice(0, 80);
-      if (rec.rate != null || rec.commRate != null) {
-        if ((ev.finance && ev.finance.enabled) || rec.commRate) {
-          const f0 = ev.finance && ev.finance.enabled ? ev.finance : null, out = rec.dir < 0;
-          const r = rec.rate != null ? rec.rate : f0 ? (out ? f0.outRate : f0.inRate) : acc.profitRate || 0;
-          const c = rec.commRate != null ? rec.commRate : f0 ? (out ? f0.outCommissionRate || 0 : f0.commissionRate) : 0;
-          ev.finance = { ...(f0 || financeFor(0, 0)), inRate: r, outRate: r, commissionRate: c, outCommissionRate: c, source: 'entry' };
-        } else { ev.rate = rec.rate > 0 ? rec.rate : 0; ev.profitDisabled = rec.rate === 0; }
-      }
-      const added = new Map((newFiles || []).map(f => [f.id, f.data]));
-      ev.attachments = (rec.files || []).map(m => { const old = (ev.attachments || []).find(a => a.id === m.id); if (old) return old; const d = added.get(m.id); return d ? { id: m.id, name: (d.name || 'file').slice(0, 80), mime: d.mime, data: d.data } : null; }).filter(Boolean).slice(0, 5);
-      await commit(next); return rec;
+    async putEntry(rec, newFiles) { const next = clone(v3); applyEntry(next, rec, newFiles); await commit(next); return rec; },
+    /** Many entries in one save (file import). */
+    async putEntries(recs) { const next = clone(v3); for (const r of recs) applyEntry(next, r, []); await commit(next); return recs; },
+    async deleteEntries(ids) {
+      const set = new Set(ids), next = clone(v3);
+      next.entries = next.entries.filter(e => !set.has(e.id) || !editableSource(e));
+      if (next.holds) next.holds = next.holds.filter(h => !set.has(h.ledgerEntryId));
+      await commit(next); return null;
     },
     async deleteEntry(id) {
       const next = clone(v3), ev = next.entries.find(e => e.id === id);

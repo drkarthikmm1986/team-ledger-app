@@ -34,6 +34,8 @@ export function createLocalBook() {
       for (const f of newFiles || []) if (rec.files.some(y => y.id === f.id)) await filePut(f.id, f.data).catch(() => { });
       book.save(); return rec;
     },
+    async putEntries(recs) { for (const r of recs) { const i = L.entries.findIndex(e => e.id === r.id); if (i >= 0) L.entries[i] = r; else L.entries.push(r); } book.save(); return recs; },
+    async deleteEntries(ids) { const set = new Set(ids); L.entries = L.entries.filter(e => !set.has(e.id)); book.save(); },
     async deleteEntry(id) { const i = L.entries.findIndex(e => e.id === id); const removed = L.entries.splice(i, 1)[0]; book.save(); return async () => { L.entries.push(removed); book.save(); }; },
     getFile: meta => fileGet(meta.id),
     async setVault(env) { if (env) L.vault = env; else delete L.vault; await book.flush(); }

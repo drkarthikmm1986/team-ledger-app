@@ -421,3 +421,53 @@ textarea.input{height:auto;min-height:80px;padding:12px 14px;resize:vertical}
 .entry .amt small.pf{color:var(--brand);font-weight:650}
 .update-banner{display:flex;align-items:center;gap:12px;width:100%;margin:6px 0 10px;padding:12px 14px;border-radius:16px;background:var(--brand);color:#fff;text-align:start;box-shadow:var(--shadow)}
 .update-banner span{display:flex;flex-direction:column}.update-banner small{opacity:.85;font-size:12.5px}
+/* ---- 4.1.8: home account cards with in / out ---- */
+.acc.acc2{display:block;padding:12px 14px 10px}
+.acc-top{display:flex;align-items:center;gap:14px}
+.acc-io{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px;padding-top:9px;border-top:1px dashed var(--line)}
+.acc-io>span{min-width:0;display:flex;flex-direction:column}
+.acc-io .mid{align-items:center;text-align:center} .acc-io .r{align-items:flex-end;text-align:right}
+.acc-io small{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:650;color:var(--muted);white-space:nowrap}
+.acc-io b{font-size:14.5px;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.sm-seg{margin-left:auto;margin-right:6px} .sm-seg button{height:30px;padding:0 10px;font-size:12.5px}
+/* ---- report filter box ---- */
+.rep-filter{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:2px 0 0}
+.rep-filter>button{display:flex;gap:10px;align-items:flex-start;padding:12px;text-align:left;min-width:0;color:inherit;font:inherit;border:1px solid var(--line)}
+.rep-filter .ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:var(--brand-soft,var(--bg2));color:var(--brand);flex:none}
+.rep-filter .tx{display:flex;flex-direction:column;min-width:0}
+.rep-filter small{font-size:11.5px;color:var(--muted);font-weight:650}
+.rep-filter b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rep-filter em{font-style:normal;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ---- report table: one line per account / day, frozen first column ---- */
+.rt-wrap{overflow:auto;max-height:72vh;border:1px solid var(--line);border-radius:var(--r);background:var(--card);box-shadow:var(--shadow);-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.rt{border-collapse:separate;border-spacing:0;font-size:13px;white-space:nowrap;min-width:100%}
+.rt th,.rt td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--line);font-weight:650}
+.rt thead th{position:sticky;top:0;z-index:2;background:var(--bg2);font-size:11.5px;color:var(--muted);font-weight:750;white-space:normal;min-width:76px;line-height:1.2;vertical-align:bottom}
+.rt .st{position:sticky;left:0;z-index:1;background:var(--card);text-align:left;max-width:132px;min-width:96px;overflow:hidden;text-overflow:ellipsis;box-shadow:1px 0 0 var(--line)}
+.rt thead .st{z-index:3;background:var(--bg2)}
+.rt td.st small{display:block;font-size:10.5px;color:var(--muted);font-weight:600}
+.rt tfoot td{position:sticky;bottom:0;background:var(--bg2);font-weight:800;border-top:2px solid var(--line);border-bottom:0}
+.rt tfoot .st{z-index:3;background:var(--bg2)}
+.rt td.z{color:var(--line)} .rt td.b{font-weight:800}
+.rt tr.click{cursor:pointer} .rt tr.click:active td{background:var(--bg2)}
+.rt .rt-open td{color:var(--muted);font-weight:600}
+.rt thead .c-inn,.rt thead .c-gIn{color:var(--in)} .rt thead .c-out,.rt thead .c-cIn,.rt thead .c-cOut{color:var(--out)} .rt thead .c-settled{color:var(--amber)}
+.rt td.c-gIn,.rt td.c-gOut,.rt td.c-profit,.rt td.c-inHand{background:color-mix(in srgb,var(--in) 6%,transparent)}
+.rt td.c-cIn,.rt td.c-cOut{background:color-mix(in srgb,var(--out) 5%,transparent)}
+/* ---- journal / settlements (collapsible) ---- */
+.rep-more{margin-top:12px;padding:0;overflow:hidden}
+.rep-more summary{list-style:none;display:flex;align-items:center;gap:10px;padding:14px;cursor:pointer}
+.rep-more summary::-webkit-details-marker{display:none}
+.rep-more summary .tx{flex:1;display:flex;flex-direction:column} .rep-more summary small{color:var(--muted);font-size:12.5px}
+.rep-more summary svg{color:var(--muted);transition:transform .2s} .rep-more[open] summary svg{transform:rotate(90deg)}
+.rep-more .list{padding:0 10px 10px}
+/* ---- import preview ---- */
+.imp-seg{margin-top:4px}
+.imp-sum{display:flex;gap:14px;flex-wrap:wrap;font-weight:800;margin:10px 2px}
+.imp-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.imp-row{display:grid;grid-template-columns:auto 82px 1fr auto;gap:10px;align-items:center;padding:9px 10px;border-bottom:1px solid var(--line);font-size:14px}
+.imp-row:last-child{border-bottom:0}
+.imp-row .d{font-weight:700;font-size:13px} .imp-row .d small,.imp-row .n small{display:block;font-size:11.5px;color:var(--muted);font-weight:600}
+.imp-row .n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.imp-row.dup{opacity:.55}
+.imp-seg{grid-template-columns:repeat(3,1fr)!important}

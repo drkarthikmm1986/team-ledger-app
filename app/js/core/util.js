@@ -1,5 +1,5 @@
 /* Shared helpers: DOM, storage, language, money, dates, icons, native bridges. */
-export const VERSION = '4.1.4';
+export const VERSION = '4.1.5';
 export const CFG = (typeof window !== 'undefined' && window.TL_CONFIG) || {};
 export const $ = (s, r) => (r || document).querySelector(s);
 export const $$ = (s, r) => [...(r || document).querySelectorAll(s)];
@@ -34,12 +34,38 @@ export const native = {
   get lock() { return W.Android && W.Android.setAppLock ? W.Android : null; }
 };
 
-/* ---------- language ---------- */
+/* ---------- language ----------
+   Tamil and English are written inline: T('தமிழ்', 'English'). Every other language is a
+   dictionary keyed by the English text (js/i18n/<code>.js), loaded before the first screen. */
+export const LANGS = [
+  ['ta', 'தமிழ்', 'Tamil'], ['en', 'English', 'English'], ['hi', 'हिन्दी', 'Hindi'], ['zh', '中文', 'Chinese'],
+  ['es', 'Español', 'Spanish'], ['ar', 'العربية', 'Arabic'], ['fr', 'Français', 'French'], ['bn', 'বাংলা', 'Bengali'],
+  ['pt', 'Português', 'Portuguese'], ['ru', 'Русский', 'Russian'], ['ur', 'اردو', 'Urdu'], ['id', 'Bahasa Indonesia', 'Indonesian'],
+  ['de', 'Deutsch', 'German'], ['ja', '日本語', 'Japanese'], ['te', 'తెలుగు', 'Telugu']
+];
+const CODES = LANGS.map(l => l[0]), RTL = ['ar', 'ur'];
 let LANG = ls.get('tl4-lang', '') || (W.Android && W.Android.getLanguage && W.Android.getLanguage()) || 'ta';
-if (LANG !== 'en') LANG = 'ta';
+if (!CODES.includes(LANG)) LANG = 'ta';
+let DICT = {};
 export const lang = () => LANG;
-export function setLang(v) { LANG = v === 'en' ? 'en' : 'ta'; ls.set('tl4-lang', LANG); try { W.Android && W.Android.setLanguage && W.Android.setLanguage(LANG); } catch (e) { } document.documentElement.lang = LANG; }
-export const T = (ta, en) => LANG === 'ta' ? ta : en;
+export const isRTL = () => RTL.includes(LANG);
+const applyDoc = () => { document.documentElement.lang = LANG; document.documentElement.dir = isRTL() ? 'rtl' : 'ltr'; };
+/** Load the dictionary for the current language (no-op for Tamil / English). */
+export async function loadLang() {
+  DICT = {};
+  if (LANG !== 'ta' && LANG !== 'en') { try { DICT = (await import(`../i18n/${LANG}.js`)).default || {}; } catch (e) { DICT = {}; } }
+  applyDoc();
+}
+export async function setLang(v) {
+  LANG = CODES.includes(v) ? v : 'ta'; ls.set('tl4-lang', LANG);
+  try { W.Android && W.Android.setLanguage && W.Android.setLanguage(LANG === 'ta' ? 'ta' : 'en'); } catch (e) { }
+  await loadLang();
+}
+export const tr = en => (LANG === 'en' || LANG === 'ta') ? en : (DICT[en] || en);
+export const T = (ta, en) => LANG === 'ta' ? ta : LANG === 'en' ? en : (DICT[en] || (W.__TL_MISS && W.__TL_MISS.add(en), en));
+/** Translation with {placeholders}: TP('{n} பதிவுகள்', '{n} entries', { n: 3 }) */
+export const TP = (ta, en, vars) => T(ta, en).replace(/\{(\w+)\}/g, (m, k) => vars && vars[k] != null ? String(vars[k]) : m);
+export const locale = () => ({ ta: 'ta-IN', en: 'en-IN', hi: 'hi-IN', zh: 'zh-CN', es: 'es-ES', ar: 'ar', fr: 'fr-FR', bn: 'bn-IN', pt: 'pt-BR', ru: 'ru-RU', ur: 'ur-PK', id: 'id-ID', de: 'de-DE', ja: 'ja-JP', te: 'te-IN' })[LANG] || 'en-IN';
 
 /* ---------- money ---------- */
 export const nf = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 });
@@ -56,7 +82,12 @@ export const nowTime = () => { const d = new Date(); return pad(d.getHours()) + 
 export const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return ymd(d); };
 const MON_TA = ['ஜன', 'பிப்', 'மார்', 'ஏப்', 'மே', 'ஜூன்', 'ஜூலை', 'ஆக', 'செப்', 'அக்', 'நவ', 'டிச'];
 const MON_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-export const monName = m => (LANG === 'ta' ? MON_TA : MON_EN)[m];
+const MON_X = {};
+export const monName = m => {
+  if (LANG === 'ta') return MON_TA[m]; if (LANG === 'en') return MON_EN[m];
+  const k = LANG; if (!MON_X[k]) { try { const f = new Intl.DateTimeFormat(locale(), { month: 'short' }); MON_X[k] = MON_EN.map((x, i) => f.format(new Date(2024, i, 15))); } catch (e) { MON_X[k] = MON_EN; } }
+  return MON_X[k][m];
+};
 export function niceDate(s) {
   if (!s) return '';
   if (s === today()) return T('இன்று', 'Today');

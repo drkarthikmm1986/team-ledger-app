@@ -5,7 +5,7 @@ import { toast, openSheet, closeSheet, confirmBox, formSheet, pickFiles, copyTex
 import { accRoute, safeId } from './ledger.js';
 
 const sessions = new Map(); // bookId -> { session, records, envelope }
-const L = (ta, en) => T(ta, en);
+const L = (ta, en) => / \*$/.test(en) ? T(ta.replace(/ \*$/, ''), en.replace(/ \*$/, '')) + ' *' : T(ta, en);
 const reveal = new Set();
 export const lockAll = () => { sessions.clear(); reveal.clear(); };
 export const vaultSession = book => sessions.get(book.id);

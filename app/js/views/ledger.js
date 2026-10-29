@@ -1,5 +1,5 @@
 /* Ledger screens shared by the personal book and group books: home, account, report, entry form. */
-import { $, esc, T, ic, LOGO, money, moneyAbs, nf, today, nowTime, addDays, niceDate, niceTime, dmy, periodRange, PERIODS, avatar, uid, ls, pctToBp, toPaise, VERSION, monName, ymd } from '../core/util.js';
+import { $, esc, T, TP, ic, LOGO, money, moneyAbs, nf, today, nowTime, addDays, niceDate, niceTime, dmy, periodRange, PERIODS, avatar, uid, ls, pctToBp, toPaise, VERSION, monName, ymd } from '../core/util.js';
 import { counts, sortEntries, accountTotals, allTotals, calcProfit, exprToPaise, suggestNotes } from '../core/ledger.js';
 import { toast, openSheet, closeSheet, confirmBox, sheetState, pickFiles, openFileData, saveFile, shareText } from '../ui/kit.js';
 import { native } from '../core/util.js';
@@ -356,7 +356,7 @@ export function accountSheet(ctx, book, a) {
   };
   if (edit) $('#a-del').onclick = async () => {
     const n = book.entries.filter(e => e.acc === a.id).length;
-    if (!await confirmBox(T('கணக்கை நீக்கவா?', 'Delete account?'), T(`“${a.name}” மற்றும் அதன் ${n} பதிவுகள் நீக்கப்படும்.`, `“${a.name}” and its ${n} entries will be deleted.`), T('நீக்கு', 'Delete'), true)) return;
+    if (!await confirmBox(T('கணக்கை நீக்கவா?', 'Delete account?'), TP('“{a}” மற்றும் அதன் {n} பதிவுகள் நீக்கப்படும்.', '“{a}” and its {n} entries will be deleted.', { a: a.name, n }), T('நீக்கு', 'Delete'), true)) return;
     try {
       const undo = await book.deleteAccount(a.id); ctx.go(book.prefix.replace(/-$/, ''));
       if (undo) toast(T('கணக்கு நீக்கப்பட்டது', 'Account deleted'), { label: T('திரும்பப் பெறு', 'Undo'), fn: async () => { await undo(); ctx.render(); } });

@@ -1,5 +1,5 @@
 /* Team Ledger 4 — app shell: state, router, tab bar, event dispatch. */
-import { $, T, ic, CFG, lang, setLang, ls, native, VERSION } from './core/util.js';
+import { $, T, ic, CFG, lang, setLang, loadLang, ls, native, VERSION } from './core/util.js';
 import { createLocalBook } from './data/local-book.js';
 import { toast, closeSheet, sheetOpen, sheetState, hardenInputs } from './ui/kit.js';
 import { viewHome, viewAccount, viewReport, ledgerActions, fromSafeId } from './views/ledger.js';
@@ -126,7 +126,7 @@ window.closeLedgerPanel = () => {
   if (ctx.ui.searchOpen) { ctx.ui.searchOpen = false; ctx.ui.q = ''; render(); return true; }
   return false;
 };
-window.applyAppLanguage = v => { setLang(v); render(); };
+window.applyAppLanguage = async v => { if (v === 'en' && lang() !== 'ta' && lang() !== 'en') return; /* native only knows ta/en */ await setLang(v); render(); };
 window.groupAuthLink = url => handleAuthLink(ctx, url);
 window.restoreLedger = text => restoreFrom(ctx, text);
 setInterval(() => idleCheck(ctx), 30000);
@@ -139,7 +139,7 @@ async function start() {
   document.addEventListener('focusin', e => { const t = e.target; if (t && t.closest && t.closest('.sheet .body') && /INPUT|TEXTAREA/.test(t.tagName)) setTimeout(() => { try { t.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (x) { } }, 350); });
   hardenInputs(document.body);
   new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) hardenInputs(n); }).observe(document.body, { childList: true, subtree: true });
-  setLang(lang()); applyTheme();
+  await loadLang(); applyTheme();
   if (window.matchMedia) { const m = matchMedia('(prefers-color-scheme: dark)'); m.addEventListener && m.addEventListener('change', () => render()); }
   await local.load();
   render();

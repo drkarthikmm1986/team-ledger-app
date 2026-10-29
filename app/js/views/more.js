@@ -1,5 +1,5 @@
 /* More: language, look, lock, backup, help, rating, about. */
-import { $, esc, T, ic, LOGO, ls, lang, setLang, VERSION, CFG, today, addDays, niceDate, ymd, uid, platform } from '../core/util.js';
+import { $, esc, T, TP, ic, LOGO, ls, lang, setLang, LANGS, VERSION, CFG, today, addDays, niceDate, ymd, uid, platform } from '../core/util.js';
 import { calcProfit } from '../core/ledger.js';
 import { toast, openSheet, closeSheet, confirmBox, pinPad, saveFile, readTextFile, shareText } from '../ui/kit.js';
 import { makeBackup, parseBackup, applyBackup } from '../data/backup.js';
@@ -16,8 +16,7 @@ export function viewMore(ctx) {
   const theme = ls.get('tl4-theme', 'auto'), lockOn = !!ls.get('tl4-pin', ''), last = Number(ls.get('tl4-last-backup', '0')), stats = ls.get('tl4-stats', 'on') === 'on';
   return `<div class="topbar"><span class="logo">${LOGO}</span><h1>${T('மேலும்', 'More')}</h1></div>
     <div class="menu">
-      <div class="row"><span class="ic">${ic('lang')}</span><span class="tx"><b>${T('மொழி', 'Language')}</b></span>
-        <span class="seg"><button class="${lang() === 'ta' ? 'on' : ''}" data-act="lang" data-v="ta">தமிழ்</button><button class="${lang() === 'en' ? 'on' : ''}" data-act="lang" data-v="en">English</button></span></div>
+      <button class="row" data-act="lang-pick"><span class="ic">${ic('lang')}</span><span class="tx"><b>${T('மொழி', 'Language')}</b><small>${esc((LANGS.find(l => l[0] === lang()) || LANGS[0])[1])}</small></span><span class="end">${ic('chev', 18)}</span></button>
       <div class="row"><span class="ic">${ic('sun')}</span><span class="tx"><b>${T('தோற்றம்', 'Look')}</b></span>
         <span class="seg"><button class="${theme === 'auto' ? 'on' : ''}" data-act="theme" data-v="auto">${T('தானாக', 'Auto')}</button><button class="${theme === 'light' ? 'on' : ''}" data-act="theme" data-v="light" aria-label="light">☀</button><button class="${theme === 'dark' ? 'on' : ''}" data-act="theme" data-v="dark" aria-label="dark">☾</button></span></div>
       <button class="row" data-act="lock"><span class="ic">${ic('lock')}</span><span class="tx"><b>${T('ஆப் பூட்டு', 'App lock')}</b><small>${T('4 இலக்க PIN — ஆப் திறக்கும்போது கேட்கும்', '4-digit PIN when the app opens')}</small></span><span class="end">${lockOn ? T('இயக்கம்', 'ON') : T('இல்லை', 'OFF')}</span></button>
@@ -73,8 +72,8 @@ export async function restoreFrom(ctx, text) {
   try { parsed = parseBackup(text); } catch (e) { toast(T('இந்த Backup-ஐப் படிக்க முடியவில்லை', 'Could not read this backup')); return; }
   const r = parsed.report;
   const msg = parsed.old
-    ? T(`பழைய ஆப்பிலிருந்து ${r.accounts} கணக்குகள், ${r.entries} பதிவுகள், ${r.files} இணைப்புகள் கிடைத்தன.`, `Found ${r.accounts} accounts, ${r.entries} entries and ${r.files} attachments from the old app.`) + (parsed.hasVault ? ' ' + T('கணக்கு விவரங்களும் உள்ளன (பழைய கடவுச்சொல்லால் திறக்கலாம்).', 'Account Details included (open with your old password).') : '')
-    : T(`${parsed.ledger.accounts.length} கணக்குகள், ${parsed.ledger.entries.length} பதிவுகள்.`, `${parsed.ledger.accounts.length} accounts, ${parsed.ledger.entries.length} entries.`);
+    ? TP('பழைய ஆப்பிலிருந்து {a} கணக்குகள், {e} பதிவுகள், {f} இணைப்புகள் கிடைத்தன.', 'Found {a} accounts, {e} entries and {f} attachments from the old app.', { a: r.accounts, e: r.entries, f: r.files }) + (parsed.hasVault ? ' ' + T('கணக்கு விவரங்களும் உள்ளன (பழைய கடவுச்சொல்லால் திறக்கலாம்).', 'Account Details included (open with your old password).') : '')
+    : TP('{a} கணக்குகள், {e} பதிவுகள்.', '{a} accounts, {e} entries.', { a: parsed.ledger.accounts.length, e: parsed.ledger.entries.length });
   const hasData = ctx.local.accounts.length > 0 && !ctx.local.demo;
   openSheet(T('Backup-ஐ ஏற்று', 'Restore backup'), `<p class="lead-text">${esc(msg)}</p>${hasData ? `<p class="note">${T('இப்போது உள்ள பதிவுகளுடன் சேர்க்கலாம், அல்லது முழுவதும் மாற்றலாம்.', 'You can add to your current records or replace them.')}</p>` : ''}`,
     hasData ? `<button class="btn ghost" id="r-merge">${T('சேர்', 'Add')}</button><button class="btn" id="r-replace">${T('மாற்று', 'Replace')}</button>` : `<button class="btn block" id="r-replace">${ic('check', 20, 3)}${T('ஏற்று', 'Restore')}</button>`);
@@ -142,10 +141,11 @@ export const moreActions = {
       const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
       if (reg) { await reg.update(); if (reg.installing || reg.waiting) { toast(T('புதிய பதிப்பு ஏற்றுகிறது…', 'Loading the new version…')); return; } }
       const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); const v = r.ok ? (await r.json()).version : VERSION;
-      toast(v && v !== VERSION ? T('புதிய பதிப்பு ' + v + ' — மீண்டும் திறக்கவும்', 'Version ' + v + ' ready — reopen the app') : T('சமீபத்திய பதிப்பு உள்ளது', 'You have the latest version'));
+      toast(v && v !== VERSION ? TP('புதிய பதிப்பு {v} — மீண்டும் திறக்கவும்', 'Version {v} ready — reopen the app', { v }) : T('சமீபத்திய பதிப்பு உள்ளது', 'You have the latest version'));
     } catch (e) { toast(T('இணையத்துடன் மீண்டும் முயற்சிக்கவும்', 'Try again with internet')); }
   },
-  lang: (ctx, b) => { setLang(b.dataset.v); ctx.render(); },
+  'lang-pick': () => openSheet(T('மொழி', 'Language'), `<div class="lang-grid">${LANGS.map(([c, n, e]) => `<button class="lang-opt ${c === lang() ? 'on' : ''}" data-act="lang" data-v="${c}" lang="${c}"><b>${esc(n)}</b><small>${esc(e)}</small></button>`).join('')}</div>`),
+  lang: async (ctx, b) => { closeSheet(true); await setLang(b.dataset.v); ctx.render(); },
   theme: (ctx, b) => { ls.set('tl4-theme', b.dataset.v); applyTheme(); ctx.render(); },
   lock: ctx => toggleLock(ctx),
   backup: ctx => doBackup(ctx),

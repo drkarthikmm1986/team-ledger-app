@@ -1,5 +1,5 @@
 /* Team Ledger Online: sign in, groups, invitations, members, recovery, comments. */
-import { $, esc, T, ic, avatar, CFG, ls, native, lang } from '../core/util.js';
+import { $, esc, T, TP, ic, avatar, CFG, ls, native, lang } from '../core/util.js';
 import { createClient } from '../online/supa.js';
 import { unlockDeviceVault } from '../online/device-vault.js';
 import { Groups } from '../online/groups.js';
@@ -279,7 +279,7 @@ export const onlineActions = {
   'team-role': (ctx, b) => openSheet(T('அனுமதி', 'Access'), `<div class="menu">${['viewer', 'commenter', 'editor', 'admin'].map(r => `<button class="row" data-act="team-setrole" data-id="${esc(b.dataset.id)}" data-role="${r}"><span class="tx"><b>${roleName(r)}</b></span>${b.dataset.role === r ? `<span class="end">${ic('check', 18)}</span>` : ''}</button>`).join('')}</div>`),
   'team-setrole': async (ctx, b) => { closeSheet(true); try { await online.groups.setRole(b.dataset.id, b.dataset.role); online.book.refresh(); online.team = null; ctx.render(); toast(T('அனுமதி மாற்றப்பட்டது', 'Access changed')); } catch (e) { toast(onlineError(e)); } },
   'team-remove': async (ctx, b) => {
-    if (!await confirmBox(T('உறுப்பினரை நீக்கவா?', 'Remove member?'), T(`${b.dataset.name} நீக்கப்படுவார். குழுச் சாவி மாற்றப்படும்; மற்ற உறுப்பினர்களுக்கு புதிய மீட்புக் குறியீடு தேவைப்படலாம்.`, `${b.dataset.name} will be removed. The group key changes; other members may need a new recovery code.`), T('நீக்கு', 'Remove'), true)) return;
+    if (!await confirmBox(T('உறுப்பினரை நீக்கவா?', 'Remove member?'), TP('{n} நீக்கப்படுவார். குழுச் சாவி மாற்றப்படும்; மற்ற உறுப்பினர்களுக்கு புதிய மீட்புக் குறியீடு தேவைப்படலாம்.', '{n} will be removed. The group key changes; other members may need a new recovery code.', { n: b.dataset.name }), T('நீக்கு', 'Remove'), true)) return;
     try { const code = await online.groups.removeMember(b.dataset.id); online.book.refresh(); online.team = null; ctx.render(); codeSheet(code, T('புதிய மீட்புச் சாவி', 'New recovery key')); } catch (e) { toast(onlineError(e)); }
   },
   'team-recovery': async ctx => { try { codeSheet(await online.groups.shortRecovery(), T('மீட்புக் குறியீடு', 'Recovery code')); } catch (e) { toast(onlineError(e)); } },

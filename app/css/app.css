@@ -258,29 +258,35 @@ textarea.input{height:auto;min-height:80px;padding:12px 14px;resize:vertical}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
-/* ---------- print (A4 report) ---------- */
+/* ---------- print (A4 report) ----------
+   .pr-page carries the whole printed layout, so it can also be measured off-screen (.pr-measure)
+   and zoomed to fit one A4 sheet (190 × 277 mm inside 10 mm margins). */
 #print-root{display:none}
+@page{size:A4;margin:10mm}
+.pr-page{width:190mm;font-family:var(--font);color:#111;font-size:10pt;line-height:1.3;background:#fff}
+.pr-page .pr-h{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #0e7c74;padding-bottom:6px;margin-bottom:8px}
+.pr-page .pr-h h1{margin:0;font-size:16pt;color:#0e7c74}
+.pr-page .pr-h p{margin:2px 0 0;color:#444;font-size:9pt}
+.pr-page .pr-sum{display:flex;gap:6px;margin:0 0 8px}
+.pr-page .pr-sum div{flex:1;min-width:0;border:1px solid #ccd;border-radius:6px;padding:5px 7px}
+.pr-page .pr-sum small{display:block;color:#555;font-size:7.5pt;line-height:1.15}
+.pr-page .pr-sum b{font-size:10.5pt;white-space:nowrap}
+.pr-page .pr-t{width:100%;border-collapse:collapse;font-size:8.5pt}
+.pr-page .pr-t th{background:#eef5f4;text-align:left;padding:3px 4px;border-bottom:1px solid #9ab;font-size:8pt}
+.pr-page .pr-t td{padding:2.5px 4px;border-bottom:1px solid #dde;vertical-align:top}
+.pr-page .pr-t tr{page-break-inside:avoid}
+.pr-page .pr-t .r{text-align:right;white-space:nowrap}
+.pr-page .pr-total td{border-top:2px solid #9ab}
+.pr-page .pr-in{color:#0a7a3e}.pr-page .pr-out{color:#b8243a}
+.pr-page .pr-acc{margin:8px 0 4px;font-size:11.5pt}.pr-page .pr-acc small{font-weight:400;color:#555}
+.pr-page .pr-f{margin-top:8px;color:#666;font-size:7.5pt;text-align:center}
+.pr-measure{position:absolute;left:-10000px;top:0;visibility:hidden}
 @media print{
-  @page{size:A4;margin:14mm 12mm}
   body{background:#fff!important;color:#000!important}
-  #app,#sheet-root,#toast,.dock,.lock{display:none!important}
-  #print-root{display:block!important;font-family:var(--font);color:#111;font-size:11pt}
-  .pr-h{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #0e7c74;padding-bottom:8px;margin-bottom:12px}
-  .pr-h h1{margin:0;font-size:18pt;color:#0e7c74}
-  .pr-h p{margin:2px 0 0;color:#444;font-size:10pt}
-  .pr-sum{display:flex;gap:10px;margin:0 0 14px}
-  .pr-sum div{flex:1;border:1px solid #ccd;border-radius:8px;padding:8px 10px}
-  .pr-sum small{display:block;color:#555;font-size:9pt}
-  .pr-sum b{font-size:13pt}
-  .pr-t{width:100%;border-collapse:collapse;font-size:10pt;page-break-inside:auto}
-  .pr-t th{background:#eef5f4;text-align:left;padding:6px;border-bottom:1px solid #9ab}
-  .pr-t td{padding:5px 6px;border-bottom:1px solid #dde;vertical-align:top}
-  .pr-t tr{page-break-inside:avoid}
-  .pr-t .r{text-align:right;white-space:nowrap}
-  .pr-in{color:#0a7a3e}.pr-out{color:#b8243a}
-  .pr-acc{margin:16px 0 6px;font-size:13pt}
-  .pr-f{margin-top:14px;color:#666;font-size:9pt;text-align:center}
+  #app,#sheet-root,#toast,.dock,.lock,.pr-measure{display:none!important}
+  #print-root{display:block!important}
 }
+
 
 /* ===== 4.1 additions: wayfinding colours, group, details, utilities ===== */
 .hero-blue{background:linear-gradient(150deg,var(--hb1),var(--hb2))}
@@ -372,9 +378,30 @@ textarea.input{height:auto;min-height:80px;padding:12px 14px;resize:vertical}
 #splash small{opacity:.75;font-size:15px;animation:fade .5s .25s both}
 @keyframes pop{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
 /* print rows */
-@media print{.pr-acc small{font-weight:400;color:#555}.pr-total td{border-top:2px solid #9ab}}
+
 .secret{-webkit-text-security:disc;text-security:disc;font-family:inherit;letter-spacing:.06em}
 .lang-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:4px 0 8px}
 .lang-opt{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:var(--card);text-align:start;min-height:58px}
 .lang-opt b{font-size:16.5px}.lang-opt small{font-size:12.5px;color:var(--muted)}
 .lang-opt.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand)}
+/* home: today strip (no grand total — each account shows its own balance) */
+.today-strip{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:stretch;margin:4px 0 2px}
+.today-strip>div{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:10px 12px;min-width:0}
+.today-strip small{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650;color:var(--muted)}
+.today-strip b{display:block;font-size:19px;font-weight:800;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ts-link{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0 12px;border-radius:16px;background:var(--brand-soft);color:var(--brand);font-weight:750;font-size:12px}
+.today-strip.blue .ts-link{background:var(--blue-soft);color:var(--blue)}
+/* profit card */
+.profit-card{padding:12px 14px;margin-top:12px}
+.pc-h{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.pc-h b{display:flex;align-items:center;gap:6px;font-size:15px}
+.pc-rates{display:flex;flex-wrap:wrap;gap:4px}.pc-rates span{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:8px;background:var(--bg2);color:var(--muted)}
+.pc-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px dashed var(--line);font-size:14.5px;gap:10px}
+.pc-row:first-of-type{border-top:0}
+.pc-row.strong{font-weight:800}.pc-row.strong b{font-size:17px}
+.amber{color:var(--amber)}
+.arrow.settle{background:var(--warn-soft);color:var(--amber)}
+.settle-t{color:var(--amber)}
+.entry .amt small.pf{color:var(--brand);font-weight:650}
+.update-banner{display:flex;align-items:center;gap:12px;width:100%;margin:6px 0 10px;padding:12px 14px;border-radius:16px;background:var(--brand);color:#fff;text-align:start;box-shadow:var(--shadow)}
+.update-banner span{display:flex;flex-direction:column}.update-banner small{opacity:.85;font-size:12.5px}

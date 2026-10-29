@@ -58,12 +58,13 @@ function convert(old, makeId) {
   const types = new Map((old.types || []).map(t => [t.id, t.name]));
   const accById = new Map(old.accounts.map(a => [a.id, a]));
   old.accounts.forEach((a, i) => {
-    const f = a.finance && a.finance.enabled ? a.finance : null;
+    const f = a.finance && a.finance.enabled ? effectiveFinance(a.finance, a) : null;
+    const fin = f ? { inProfit: f.inRate || 0, outProfit: f.outRate || 0, inComm: f.commissionRate || 0, outComm: f.outCommissionRate || 0 }
+      : { inProfit: a.profitRate || 0, outProfit: a.profitRate || 0, inComm: 0, outComm: 0 };
     accounts.push({
       id: a.id, name: String(a.name || 'Account').slice(0, 80), phone: '', note: '',
       opening: Number.isSafeInteger(a.opening) ? a.opening : 0,
-      rate: f ? (f.inRate || 0) : (a.profitRate || 0),
-      commRate: f ? (f.commissionRate || 0) : 0,
+      rate: fin.inProfit, commRate: fin.inComm, fin,
       created: a.created || i, imported: true
     });
     report.accounts++;

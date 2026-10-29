@@ -55,6 +55,7 @@ function render() {
   else html = `<div class="topbar"><button class="icon-btn" data-go="online">${ic('back')}</button><h1>${T('குழு திறக்கிறது…', 'Opening group…')}</h1></div><div class="loader"><span></span></div>`;
   const actions = (r.name === 'home' || r.name === 'acc') && book.canEdit && !(r.acc && r.acc.locked);
   const tab = r.group || r.name === 'online' || r.name === 'loading' || r.name === 'team' ? 'online' : r.name === 'acc' ? 'home' : r.name;
+  if (window.TL && window.TL.updateReady && (r.name === 'home' || r.name === 'more')) html = `<button class="update-banner" data-act="update-now">${ic('refresh', 20)}<span><b>${T('புதிய பதிப்பு தயார்', 'New version ready')}</b><small>${T('புதுப்பிக்க இங்கே தொடவும்', 'Tap here to update')}</small></span></button>` + html;
   const markup = `<div class="screen ${actions ? '' : 'no-actions'} ${r.group ? 'is-group' : ''} fade-in" data-view="${r.name}">${html}</div>${dock(r, tab, actions)}`;
   if (!patchKeepingFocus(markup, r.name)) $('#app').innerHTML = markup;
   if (r.name === 'online') bindOnlineForms(ctx);
@@ -88,7 +89,8 @@ function dock(r, tab, actions) {
 
 /* ---------- events ---------- */
 const ACTIONS = Object.assign({}, ledgerActions, detailsActions, onlineActions, moreActions, {
-  'sheet-close': () => closeSheet()
+  'sheet-close': () => closeSheet(),
+  'update-now': () => location.reload()
 });
 window.addEventListener('hashchange', () => { closeSheet(true); render(); window.scrollTo(0, 0); });
 document.addEventListener('click', async ev => {
@@ -153,6 +155,8 @@ async function start() {
     const safeReload = () => { if (reloading) return; if (sheetOpen() || document.querySelector('.lock') || /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '')) { setTimeout(safeReload, 4000); return; } reloading = true; location.reload(); };
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) safeReload(); });
     navigator.serviceWorker.register('sw.js').then(reg => {
+      const ready = () => { window.TL.updateReady = true; render(); };
+      reg.addEventListener('updatefound', () => { const w = reg.installing; if (w) w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) ready(); }); });
       const check = () => reg.update().catch(() => { });
       document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
       setInterval(check, 30 * 60 * 1000);

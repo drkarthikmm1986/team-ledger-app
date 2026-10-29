@@ -6,6 +6,7 @@ import { Groups } from '../online/groups.js';
 import { fingerprint } from '../online/invitations.js';
 import { normalizePhone, normalizeContact, phoneError } from '../online/phone.js';
 import { createGroupBook } from '../online/group-book.js';
+import { createKeySync } from '../online/key-sync.js';
 import { toast, openSheet, closeSheet, confirmBox, formSheet, fieldHtml, copyText, toggleSecret } from '../ui/kit.js';
 import { roleName } from './ledger.js';
 
@@ -108,6 +109,8 @@ async function signIn(identity, password) {
   try { online.vault = await unlockDeviceVault(user.id, password); }
   catch (e) { await c.auth.signOut(); throw e; }
   online.user = user; online.groups = new Groups(c, online.vault); online.lastActivity = Date.now(); online.list = null;
+  // Keys from this login's other phones (no recovery code needed on a new phone).
+  online.syncing = createKeySync(c, user.id, password).then(k => { if (online.groups && online.user === user) { online.groups.sync = k; return online.groups.syncAll(); } }).catch(() => 0);
   if (online.vault.needsRecovery) toast(T('கடவுச்சொல் மாறியுள்ளது: குழு மீட்புக் குறியீடு பயன்படுத்தவும்.', 'Password changed: use your group recovery code.'));
 }
 export async function signOut(ctx) {
@@ -135,7 +138,9 @@ async function openGroup(ctx, gid, fromRoute) {
     try { await online.groups.load(gid); }
     catch (e) {
       if (e.code !== 'KEY_REQUIRED') throw e;
-      if (await online.groups.recoverPendingRotation(gid)) await online.groups.load(gid);
+      if (online.syncing) { await online.syncing; try { await online.groups.syncAll(); } catch (x) { } }
+      if (online.groups.vault.get(gid) && online.groups.vault.get(gid).epoch === e.group.epoch) await online.groups.load(gid);
+      else if (await online.groups.recoverPendingRotation(gid)) await online.groups.load(gid);
       else { online.busy = false; restoreSheet(ctx, gid, e.group); if (fromRoute) ctx.go('online'); return; }
     }
     online.book = createGroupBook(online.groups); online.book.prefix = 'g-' + gid + '-';
@@ -190,18 +195,40 @@ function codeSheet(code, title) {
   $('#code-copy').onclick = () => copyText(code);
 }
 function restoreSheet(ctx, gid, group) {
-  formSheet(T('குழுவை மீட்டெடு', 'Restore group'), `<p class="note">${group ? `<b>${esc(group.name)}</b> — ` : ''}${T('இந்த போனில் குழுச் சாவி இல்லை. நிர்வாகி உருவாக்கிய 10 எழுத்து மீட்புக் குறியீட்டை (அல்லது பழைய நீண்ட சாவியை) உள்ளிடுங்கள். அதை உருவாக்கிய அதே login-ல் இருக்க வேண்டும்.', 'This phone does not have the group key. Enter the 10-character recovery code (or an old long key). Use the same login that created it.')}</p>
-    <div class="field"><label for="rc">${T('மீட்புக் குறியீடு', 'Recovery code')}</label><textarea class="input mono" id="rc" rows="2" maxlength="4096" autocomplete="off" spellcheck="false"></textarea></div>
-    <p class="note">${T('பழைய ஆப்பில்: குழு → நிர்வாகம் → மீட்பு → “மீட்புக் குறியீடு உருவாக்கு”.', 'In the old app: Group → Team / Admin → Recovery → “Create recovery code”.')}</p>`,
+  const owner = group && online.user && group.owner_id === online.user.id;
+  formSheet(T('குழுவைத் திற', 'Open group'), `${group ? `<p class="lead-text"><b>${esc(group.name)}</b></p>` : ''}
+    <div class="steps-mini">
+      <div class="row card rounded"><span class="ic blue">${ic('refresh')}</span><span class="tx"><b>${T('எளிய வழி — குறியீடு தேவையில்லை', 'Easy way — no code needed')}</b><small>${T('இந்தக் குழு திறந்திருக்கும் போனில் புதிய Team Ledger-ல் அதே கணக்கில் ஒருமுறை உள்நுழையுங்கள். பிறகு இங்கே “மீண்டும் பார்” அழுத்தினால் தானாகத் திறக்கும்.', 'On the phone where this group already opens, sign in once to the new Team Ledger with the same account. Then tap “Check again” here and it opens by itself.')}</small></span></div>
+      <button class="btn ghost block mt8" type="button" id="rs-again">${ic('refresh', 18)}${T('மீண்டும் பார்', 'Check again')}</button>
+    </div>
+    <div class="field mt14"><label for="rc">${T('அல்லது மீட்புக் குறியீடு (இருந்தால் மட்டும்)', 'Or a recovery code (only if you have one)')}</label><textarea class="input mono" id="rc" rows="2" maxlength="4096" autocomplete="off" spellcheck="false"></textarea></div>
+    ${owner ? `<details class="danger-zone mt14"><summary>${T('அந்த போனும் குறியீடும் இல்லையா?', 'No such phone and no code?')}</summary><p class="note">${T('பாதுகாப்புக்காக சாவி இல்லாமல் யாராலும் (எங்களாலும்) பதிவுகளைத் திறக்க முடியாது. இந்தக் குழுவை நீக்கிவிட்டு புதிதாக உருவாக்கலாம்.', 'For safety nobody (not even us) can open the records without the key. You can delete this group and create it again.')}</p><button class="btn danger block" type="button" id="rs-del">${ic('trash', 20)}${T('நீக்கிவிட்டு புதிதாகத் தொடங்கு', 'Delete and start again')}</button></details>` : ''}`,
     T('மீட்டெடு', 'Restore'), async () => {
       const code = $('#rc').value.trim(); if (!code) throw Error(T('குறியீட்டை உள்ளிடுங்கள்', 'Enter the code'));
       try { if (/^[A-Za-z0-9]{10}$/.test(code)) await online.groups.restoreShortRecovery(code); else await online.groups.accept(code); }
       catch (e) { throw Error(onlineError(e)); }
-      const id = online.groups.current.row.id;
-      online.book = createGroupBook(online.groups); online.book.prefix = 'g-' + id + '-'; online.team = null; online.list = null;
-      closeSheet(true); ctx.go('g-' + id); toast(T('குழு திறக்கப்பட்டது ✓', 'Group opened ✓')); loadList(ctx);
+      opened(online.groups.current.row.id);
       return false;
     });
+  function opened(id) {
+    online.book = createGroupBook(online.groups); online.book.prefix = 'g-' + id + '-'; online.team = null; online.list = null;
+    closeSheet(true); ctx.go('g-' + id); toast(T('குழு திறக்கப்பட்டது ✓', 'Group opened ✓')); loadList(ctx);
+  }
+  $('#rs-again').onclick = async () => {
+    const btn = $('#rs-again'); btn.disabled = true;
+    try {
+      await online.groups.syncAll();
+      if (gid && online.groups.vault.get(gid)) { await online.groups.load(gid); opened(gid); return; }
+      toast(T('இன்னும் வரவில்லை. அந்த போனில் புதிய ஆப்பில் உள்நுழைந்தீர்களா?', 'Not yet. Did you sign in on that phone with the new app?'));
+    } catch (e) { toast(onlineError(e)); }
+    if (btn.isConnected) btn.disabled = false;
+  };
+  if (owner) $('#rs-del').onclick = async () => {
+    if (!await confirmBox(T('குழுவை நீக்கவா?', 'Delete the group?'), TP('“{g}” குழுவும் அதன் பதிவுகளும் எல்லோருக்கும் நிரந்தரமாக நீங்கும்.', '“{g}” and its records are removed for everyone, permanently.', { g: group.name }), T('நீக்கு', 'Delete'), true)) return;
+    const { error } = await client().rpc('tl4_delete_group', { p_group: group.id, p_name: group.name });
+    if (error) { toast(onlineError(error)); return; }
+    online.list = null; ctx.go('online'); loadList(ctx); toast(T('நீக்கப்பட்டது', 'Deleted'));
+  };
 }
 async function joinFlow(ctx, code) {
   const result = await online.groups.joinShort(code);

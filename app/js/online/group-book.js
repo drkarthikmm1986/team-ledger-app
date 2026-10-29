@@ -4,6 +4,7 @@
 import { toPersonal, validatePersonal } from './personal-model.js';
 import { convert } from '../core/import-old.js';
 import { uuid } from '../core/util.js';
+import { accRates } from '../core/ledger.js';
 
 const clone = v => structuredClone(v);
 
@@ -22,6 +23,7 @@ export function createGroupBook(groups) {
       const srcId = e.id.replace(/-(in|out)$/, '');
       const src = byId.get(e.id) || byId.get(srcId);
       e.locked = !editableSource(byId.get(e.id));
+      if (e.id.startsWith('settle-')) { e.kind = 'settle'; e.locked = false; }
       if (src && Array.isArray(src.attachments)) {
         e.files = e.id.endsWith('-out') ? [] : src.attachments.map(a => { files[a.id] = { name: a.name || 'file', mime: a.mime, data: a.data }; return { id: a.id, name: a.name || 'file', mime: a.mime }; });
       }
@@ -37,6 +39,13 @@ export function createGroupBook(groups) {
     rebuild();
   }
   const financeFor = (rate, commRate) => ({ version: 1, enabled: true, include: true, inRate: rate || 0, outRate: rate || 0, commissionRate: commRate || 0, outCommissionRate: 0, payment: false, paid: 0 });
+  /* Account % → old-app finance block (in / out profit %, in / out payable commission %). */
+  const applyRates = (src, a) => {
+    const r = accRates(a), simple = !r.inComm && !r.outComm && r.inProfit === r.outProfit;
+    if (simple && !(src.finance && src.finance.enabled)) { src.profitRate = r.inProfit; return; }
+    src.finance = Object.assign(src.finance && src.finance.enabled ? src.finance : financeFor(0, 0), { inRate: r.inProfit, outRate: r.outProfit, commissionRate: r.inComm, outCommissionRate: r.outComm });
+    src.profitRate = r.inProfit;
+  };
 
   const book = {
     kind: 'group',
@@ -54,13 +63,9 @@ export function createGroupBook(groups) {
     getFile: async meta => view.files[meta.id] || null,
     async putAccount(a) {
       const next = clone(v3); let src = next.accounts.find(x => x.id === a.id);
-      if (!src) { src = { id: a.id || uuid(), name: a.name, opening: a.opening || 0, kind: 'ledger', flow: 'general', profitRate: a.rate || 0, created: Date.now() }; if (a.commRate) src.finance = financeFor(a.rate, a.commRate); next.accounts.push(src); a.id = src.id; }
-      else {
-        src.name = a.name; src.opening = a.opening || 0;
-        if (src.finance && src.finance.enabled) Object.assign(src.finance, { inRate: a.rate || 0, outRate: a.rate || 0, commissionRate: a.commRate || 0 });
-        else if (a.commRate) src.finance = financeFor(a.rate, a.commRate);
-        else src.profitRate = a.rate || 0;
-      }
+      if (!src) { src = { id: a.id || uuid(), name: a.name, opening: a.opening || 0, kind: 'ledger', flow: 'general', profitRate: 0, created: Date.now() }; next.accounts.push(src); a.id = src.id; }
+      else { src.name = a.name; src.opening = a.opening || 0; }
+      applyRates(src, a);
       await commit(next); return a;
     },
     async deleteAccount(id) {
@@ -87,8 +92,10 @@ export function createGroupBook(groups) {
       if (rec.cat) ev.typeName = rec.cat.slice(0, 80);
       if (rec.rate != null || rec.commRate != null) {
         if ((ev.finance && ev.finance.enabled) || rec.commRate) {
-          const r = rec.rate != null ? rec.rate : (ev.finance ? ev.finance.inRate : acc.profitRate || 0);
-          ev.finance = { ...(ev.finance && ev.finance.enabled ? ev.finance : financeFor(0, 0)), inRate: r, outRate: r, commissionRate: rec.commRate != null ? rec.commRate : (ev.finance ? ev.finance.commissionRate : 0), source: 'entry' };
+          const f0 = ev.finance && ev.finance.enabled ? ev.finance : null, out = rec.dir < 0;
+          const r = rec.rate != null ? rec.rate : f0 ? (out ? f0.outRate : f0.inRate) : acc.profitRate || 0;
+          const c = rec.commRate != null ? rec.commRate : f0 ? (out ? f0.outCommissionRate || 0 : f0.commissionRate) : 0;
+          ev.finance = { ...(f0 || financeFor(0, 0)), inRate: r, outRate: r, commissionRate: c, outCommissionRate: c, source: 'entry' };
         } else { ev.rate = rec.rate > 0 ? rec.rate : 0; ev.profitDisabled = rec.rate === 0; }
       }
       const added = new Map((newFiles || []).map(f => [f.id, f.data]));
@@ -100,6 +107,22 @@ export function createGroupBook(groups) {
       if (!ev || !editableSource(ev)) throw Error('locked');
       next.entries = next.entries.filter(e => e.id !== id);
       if (next.holds) next.holds = next.holds.filter(h => h.ledgerEntryId !== id);
+      await commit(next); return null;
+    },
+    /* Profit settlements live on the account, exactly like the old app (account.settlements). */
+    async putSettle(rec) {
+      const next = clone(v3), acc = next.accounts.find(a => a.id === rec.acc);
+      if (!acc) throw Error('Account not found');
+      const sid = String(rec.id || '').replace(/^settle-/, '') || uuid();
+      acc.settlements = Array.isArray(acc.settlements) ? acc.settlements : [];
+      let st = acc.settlements.find(x => x.id === sid);
+      if (!st) { st = { id: sid }; acc.settlements.push(st); }
+      Object.assign(st, { date: rec.date, amount: rec.amt, note: (rec.note || '').slice(0, 2000) });
+      await commit(next); return rec;
+    },
+    async deleteSettle(id) {
+      const next = clone(v3), sid = String(id).replace(/^settle-/, '');
+      for (const a of next.accounts) if (Array.isArray(a.settlements)) a.settlements = a.settlements.filter(x => x.id !== sid);
       await commit(next); return null;
     },
     async setVault(env) { const next = clone(v3); if (env) next.accountDetailsVault = env; else delete next.accountDetailsVault; await commit(next); }

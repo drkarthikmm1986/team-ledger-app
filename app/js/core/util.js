@@ -1,5 +1,5 @@
 /* Shared helpers: DOM, storage, language, money, dates, icons, native bridges. */
-export const VERSION = '4.1.5';
+export const VERSION = '4.1.6';
 export const CFG = (typeof window !== 'undefined' && window.TL_CONFIG) || {};
 export const $ = (s, r) => (r || document).querySelector(s);
 export const $$ = (s, r) => [...(r || document).querySelectorAll(s)];
@@ -69,8 +69,10 @@ export const locale = () => ({ ta: 'ta-IN', en: 'en-IN', hi: 'hi-IN', zh: 'zh-CN
 
 /* ---------- money ---------- */
 export const nf = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 });
-export const money = p => (p < 0 ? '−' : '') + '₹' + nf.format(Math.abs(p || 0) / 100);
-export const moneyAbs = p => '₹' + nf.format(Math.abs(p || 0) / 100);
+const nf2 = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+const fmt = p => { const a = Math.abs(p || 0); return (a % 100 ? nf2 : nf).format(a / 100); }; // ₹12.50, not ₹12.5
+export const money = p => (p < 0 ? '−' : '') + '₹' + fmt(p);
+export const moneyAbs = p => '₹' + fmt(p);
 export const toPaise = v => { const n = Number(String(v).replace(/,/g, '')); return Number.isFinite(n) ? Math.round(n * 100) : NaN; };
 export const pctToBp = v => { const s = String(v == null ? '' : v).trim(); if (s === '') return null; return Math.round(Math.min(100, Math.max(0, Number(s) || 0)) * 100); };
 
@@ -141,6 +143,7 @@ const P = {
   id: 'M4 5h16v14H4zM8 10a2 2 0 1 0 4 0 2 2 0 0 0-4 0M6.5 16a3.5 3.5 0 0 1 7 0M15 9h3M15 13h3',
   copy: 'M8 8h12v12H8zM4 16V4h12', eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
   eyeoff: 'M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.2A9.7 9.7 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4M6.6 6.6C3.8 8.4 2 12 2 12s3.5 7 10 7a9.6 9.6 0 0 0 5.4-1.6',
+  coin: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm-3 6h6M9 12h6m-4-3c2.5 0 2.5 6 0 6l3 3',
   cloud: 'M7 18a5 5 0 1 1 1-9.9A6 6 0 0 1 19.5 10 4 4 0 0 1 18 18z', refresh: 'M20 7v5h-5M4 17v-5h5M6.1 7a7 7 0 0 1 11.7-1L20 9M4 15l2.2 3A7 7 0 0 0 17.9 17',
   login: 'M14 4h5v16h-5M3 12h12m-5-5 5 5-5 5', logout: 'M10 4H5v16h5M21 12H9m5-5-5 5 5 5', key: 'M15 7a4 4 0 1 1-3.9 5H8v3H5v-3H3v-3h8.1A4 4 0 0 1 15 7Z',
   chat: 'M4 5h16v11H8l-4 4z', shield: 'M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z', link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',

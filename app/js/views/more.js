@@ -34,7 +34,7 @@ export function viewMore(ctx) {
       ${CFG.shareUrl ? `<button class="row" data-act="share-app"><span class="ic">${ic('share')}</span><span class="tx"><b>${T('நண்பர்களுடன் பகிர்', 'Share with friends')}</b></span></button>` : ''}
       ${CFG.supabaseUrl && !ctx.preview ? `<button class="row" data-act="stats"><span class="ic">${ic('info')}</span><span class="tx"><b>${T('பெயரில்லா பயன்பாட்டு எண்ணிக்கை', 'Anonymous usage count')}</b><small>${T('எத்தனை பேர் பயன்படுத்துகிறார்கள் என்பதை மட்டும் எண்ணும். கணக்கு விவரம் எதுவும் அனுப்பப்படாது.', 'Only counts how many people use the app. None of your records are sent.')}</small></span><span class="end">${stats ? T('இயக்கம்', 'ON') : T('இல்லை', 'OFF')}</span></button>` : ''}
     </div>
-    ${!ctx.preview ? `<div class="section-h"><h2>${T('புதுப்பிப்பு', 'Updates')}</h2></div>
+    ${true ? `<div class="section-h"><h2>${T('புதுப்பிப்பு', 'Updates')}</h2></div>
     <div class="menu">
       <button class="row" data-act="check-update"><span class="ic green">${ic('refresh')}</span><span class="tx"><b>${T('புதிய பதிப்பு உள்ளதா பார்', 'Check for updates')}</b><small>${T('இப்போது: ', 'Now: ')}${VERSION} · ${T('புதிய பதிப்பு வந்தால் தானாகவே சொல்லும்', 'You are told automatically when a new version arrives')}</small></span></button>
     </div>` : ''}
@@ -135,8 +135,10 @@ function loadDemo(ctx) {
 }
 
 export const moreActions = {
-  'check-update': async () => {
+  'check-update': async ctx => {
     if (window.LedgerUpdates && window.LedgerUpdates.check) { window.LedgerUpdates.check(); return; }
+    if (ctx.preview) { toast(TP('இந்த link எப்போதும் சமீபத்திய பதிப்பைத் திறக்கும் ({v})', 'This link always opens the latest version ({v})', { v: VERSION })); return; }
+    if (window.TL && window.TL.updateReady) { location.reload(); return; }
     try {
       const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
       if (reg) { await reg.update(); if (reg.installing || reg.waiting) { toast(T('புதிய பதிப்பு ஏற்றுகிறது…', 'Loading the new version…')); return; } }

@@ -1,8 +1,8 @@
 /* Ledger screens shared by the personal book and group books: home, account, report, entry form. */
 import { $, esc, T, TP, ic, LOGO, money, moneyAbs, nf, today, nowTime, addDays, niceDate, niceTime, dmy, periodRange, PERIODS, avatar, uid, ls, pctToBp, toPaise, VERSION, monName, ymd } from '../core/util.js';
-import { counts, sortEntries, accountTotals, allTotals, calcProfit, exprToPaise, suggestNotes } from '../core/ledger.js';
+import { counts, sortEntries, accountTotals, allTotals, calcProfit, exprToPaise, suggestNotes, accRates, dirRates, hasRates, isSettle, RATE_KEYS } from '../core/ledger.js';
 import { toast, openSheet, closeSheet, confirmBox, sheetState, pickFiles, openFileData, saveFile, shareText } from '../ui/kit.js';
-import { native } from '../core/util.js';
+import { native, locale } from '../core/util.js';
 
 export const safeId = id => /^[A-Za-z0-9-]{1,80}$/.test(id) ? id : 'h' + [...new TextEncoder().encode(id)].map(b => b.toString(16).padStart(2, '0')).join('');
 export const fromSafeId = s => /^h([0-9a-f]{2})+$/.test(s) && s.length > 3 ? new TextDecoder().decode(Uint8Array.from(s.slice(1).match(/../g).map(h => parseInt(h, 16)))) : s;
@@ -17,6 +17,10 @@ export function customDates(c, key) {
 }
 function entryRow(book, e, bal, showAcc) {
   const acc = book.account(e.acc);
+  if (isSettle(e)) return `<button class="entry" data-act="edit-entry" data-id="${esc(e.id)}">
+    <span class="arrow settle">${ic('coin', 20, 2.4)}</span>
+    <span class="meta"><span class="t1">${esc(e.note || T('லாபத்திலிருந்து எடுத்தது', 'Taken from profit'))}</span><span class="t2">${esc([showAcc && acc ? acc.name : niceDate(e.date), T('இருப்பை மாற்றாது', 'Balance not changed')].join(' · '))}</span></span>
+    <span class="amt num settle-t">−${moneyAbs(e.amt)}<small>${T('லாபத்திலிருந்து', 'from profit')}</small></span></button>`;
   const nb = !counts(e);
   const CAT = { 'Money in': T('வரவு', 'Money in'), 'Money out': T('செலவு', 'Money out'), 'Money given': T('கொடுத்தது', 'Money given'), 'Return': T('திரும்ப வந்தது', 'Return'), 'Deposit': T('வைப்பு', 'Deposit'), 'Withdrawal': T('எடுத்தது', 'Withdrawal'), 'Hold': T('நிலுவை', 'Hold'), 'Hold / To receive': T('நிலுவை', 'Hold'), 'Settled': T('தீர்வு', 'Settled'), 'Profit': T('லாபம்', 'Profit'), 'Commission paid': T('கமிஷன் செலுத்தியது', 'Commission paid') };
   const catName = c => CAT[c] || c;
@@ -26,7 +30,7 @@ function entryRow(book, e, bal, showAcc) {
   return `<button class="entry" data-act="edit-entry" data-id="${esc(e.id)}">
     <span class="arrow ${nb ? 'nb' : e.dir > 0 ? 'in' : 'out'}">${ic(e.dir > 0 ? 'down' : 'up', 20, 2.6)}</span>
     <span class="meta"><span class="t1">${esc(title)}${tag}</span><span class="t2">${esc(sub)}</span></span>
-    <span class="amt num ${nb ? 'muted' : e.dir > 0 ? 'in' : 'out'}">${e.dir > 0 ? '+' : '−'}${moneyAbs(e.amt)}${bal != null ? `<small>${T('இருப்பு', 'Bal')} ${money(bal)}</small>` : (e.profit ? `<small>${T('லாபம்', 'Profit')} ${money(e.profit)}</small>` : '')}</span>
+    <span class="amt num ${nb ? 'muted' : e.dir > 0 ? 'in' : 'out'}">${e.dir > 0 ? '+' : '−'}${moneyAbs(e.amt)}${bal != null ? `<small>${T('இருப்பு', 'Bal')} ${money(bal)}</small>` : ''}${e.profit || e.comm ? `<small class="pf">${T('லாபம்', 'Profit')} ${money((e.profit || 0) + (e.comm || 0))}${e.comm ? ` · ${T('கமிஷன்', 'Comm.')} ${moneyAbs(e.comm)}` : ''}</small>` : ''}</span>
   </button>`;
 }
 export function helpSteps() {
@@ -65,13 +69,10 @@ export function viewHome(ctx, book) {
   }
   const backupDue = !group && book.entries.length >= 5 && (Date.now() - Number(ls.get('tl4-last-backup', '0'))) > 7 * 864e5;
   return top + (ctx.preview && !group ? previewNote() : '') + `
-    <section class="hero ${group ? 'hero-blue' : ''}">
-      <div class="hero-top"><span class="label">${T('மொத்த இருப்பு', 'Total balance')}</span><button class="hero-link" data-go="${book.prefix}report">${ic('chart', 16)}${T('அறிக்கை', 'Report')}</button></div>
-      <div class="big num">${money(all.bal)}</div>
-      <div class="pills">
-        <div class="pill"><small><i class="dot in"></i>${T('இன்று வரவு', 'In today')}</small><b class="num">${money(day.inn)}</b></div>
-        <div class="pill"><small><i class="dot out"></i>${T('இன்று செலவு', 'Out today')}</small><b class="num">${money(day.out)}</b></div>
-      </div>
+    <section class="today-strip ${group ? 'blue' : ''}">
+      <div><small><i class="dot in"></i>${T('இன்று வரவு', 'In today')}</small><b class="num in">${money(day.inn)}</b></div>
+      <div><small><i class="dot out"></i>${T('இன்று செலவு', 'Out today')}</small><b class="num out">${money(day.out)}</b></div>
+      <button class="ts-link" data-go="${book.prefix}report" aria-label="${T('அறிக்கை', 'Report')}">${ic('chart', 18)}<span>${T('அறிக்கை', 'Report')}</span></button>
     </section>
     ${backupDue ? `<button class="row card mt12 rounded" data-act="backup"><span class="ic amber">${ic('bell')}</span><span class="tx"><b>${T('Backup எடுக்கும் நேரம்', 'Time for a backup')}</b><small>${T('போன் தொலைந்தாலும் கணக்கு பாதுகாப்பாக இருக்கும்', 'Keeps your records safe if the phone is lost')}</small></span><span class="end">${ic('save', 20)}</span></button>` : ''}
     ${ctx.ui.searchOpen || q ? `<label class="search">${ic('search', 20)}<input id="q" type="search" value="${esc(ctx.ui.q)}" placeholder="${T('பெயர், குறிப்பு, தொகை தேடு', 'Search name, note, amount')}" autocomplete="off"><button data-act="search-close" aria-label="close">${ic('x', 20)}</button></label>` : ''}
@@ -80,12 +81,52 @@ export function viewHome(ctx, book) {
     <div class="list">${accs.map(({ a, t }) => `
       <button class="acc" data-go="${accRoute(book, a.id)}">${avatar(a.name)}
         <span class="meta"><span class="name">${esc(a.name)}</span><span class="when">${t.last ? niceDate(t.last) : T('பதிவு இல்லை', 'No entries')}</span></span>
-        <span class="bal num ${t.bal < 0 ? 'out' : t.bal > 0 ? 'in' : ''}">${money(t.bal)}<small>${T('இருப்பு', 'Balance')}</small></span>
+        <span class="bal num ${t.bal < 0 ? 'out' : t.bal > 0 ? 'in' : ''}">${money(t.bal)}<small>${t.gross || t.settled ? `${T('லாபம்', 'Profit')} ${money(t.inHand)}` : T('இருப்பு', 'Balance')}</small></span>
       </button>`).join('') || `<p class="muted center">${T('எதுவும் கிடைக்கவில்லை', 'Nothing found')}</p>`}</div>
     ${found.length ? `<div class="section-h"><h2>${T('பதிவுகள்', 'Entries')}</h2></div><div class="entries">${found.map(e => entryRow(book, e, null, true)).join('')}</div>` : ''}`;
 }
 const previewNote = () => `<div class="row card mb12 rounded"><span class="ic amber">${ic('info')}</span><span class="tx"><b>${T('இணைய link பதிப்பு', 'Web link version')}</b><small>${T('இங்கே தனிக் கணக்கு, கணக்கு விவரங்கள் வேலை செய்யும். குழுக் கணக்கு (Online), PDF — Android ஆப்பில் (மேலும் → APK).', 'Personal book and Account Details work here. Online groups and PDF work in the Android app (More → APK).')}</small></span></div>`;
 export const roleName = r => ({ admin: T('நிர்வாகி', 'Admin'), editor: T('திருத்துபவர்', 'Editor'), commenter: T('கருத்திடுபவர்', 'Commenter'), viewer: T('பார்வையாளர்', 'Viewer') }[r] || r || '');
+
+/* ---------------- Profit card (old app: profit, payable commission, settlement, in hand) ---------------- */
+function profitCard(book, a, t) {
+  const r = accRates(a), pct = v => (v / 100).toFixed(2).replace(/\.?0+$/, '') + '%';
+  const rates = [[r.inProfit, T('வரவு லாபம்', 'In profit')], [r.outProfit, T('செலவு லாபம்', 'Out profit')], [r.inComm, T('வரவு கமிஷன்', 'In commission')], [r.outComm, T('செலவு கமிஷன்', 'Out commission')]].filter(x => x[0]);
+  const line = (label, v, cls, strong) => `<div class="pc-row ${strong ? 'strong' : ''}"><span>${label}</span><b class="num ${cls || ''}">${money(v)}</b></div>`;
+  return `<section class="card profit-card">
+    <div class="pc-h"><b>${ic('coin', 18)} ${T('லாபக் கணக்கு', 'Profit account')}</b>${rates.length ? `<span class="pc-rates">${rates.map(x => `<span>${x[1]} ${pct(x[0])}</span>`).join('')}</span>` : ''}</div>
+    ${line(T('லாபம்', 'Profit'), t.gross, 'in')}
+    ${t.comm ? line(T('− கொடுக்க வேண்டிய கமிஷன்', '− Commission payable'), -t.comm, 'out') : ''}
+    ${t.comm ? line(T('நிகர லாபம்', 'Net profit'), t.profit, '', true) : ''}
+    ${t.settled ? line(T('− லாபத்திலிருந்து எடுத்தது', '− Taken from profit'), -t.settled, 'amber') : ''}
+    ${line(T('கையிருப்பு லாபம்', 'Profit in hand'), t.inHand, t.inHand < 0 ? 'out' : 'in', true)}
+    ${t.paid ? `<p class="note">${T('கமிஷன் செலுத்தியது', 'Commission paid')} ${money(t.paid)}</p>` : ''}
+    ${book.canEdit && !a.locked ? `<button class="btn ghost sm block mt8" data-act="settle-new" data-acc="${esc(a.id)}">${ic('coin', 18)}${T('லாபத்திலிருந்து எடு (Settle)', 'Take from profit (Settle)')}</button>` : ''}
+  </section>`;
+}
+export function settleSheet(ctx, book, a, edit) {
+  const t = accountTotals(book, a);
+  const f = edit ? { amt: edit.amt, date: edit.date, note: edit.note || '' } : { amt: 0, date: today(), note: '' };
+  const body = `<div class="pc-row strong"><span>${T('கையிருப்பு லாபம்', 'Profit in hand')}</span><b class="num ${t.inHand < 0 ? 'out' : 'in'}">${money(t.inHand + (edit ? edit.amt : 0))}</b></div>
+    <div class="field mt12"><label for="st-amt">${T('எடுத்த தொகை ₹', 'Amount taken ₹')}</label><input class="input" id="st-amt" type="number" inputmode="decimal" step="0.01" min="0" value="${f.amt ? f.amt / 100 : ''}" placeholder="0"></div>
+    <div class="field"><label for="st-date">${T('தேதி', 'Date')}</label><input class="input" id="st-date" type="date" value="${f.date}"></div>
+    <div class="field"><label for="st-note">${T('குறிப்பு (விருப்பம்)', 'Note (optional)')}</label><input class="input" id="st-note" maxlength="300" value="${esc(f.note)}" placeholder="${T('உதா: பங்குதாரருக்கு, சொந்தச் செலவு', 'e.g. To partner, personal use')}"></div>
+    <p class="note">${T('இது லாபத்திலிருந்து மட்டும் கழியும். கணக்கு இருப்பு மாறாது.', 'This is taken from the profit only. The account balance does not change.')}</p>
+    ${edit ? `<button class="btn danger block mt14" id="st-del">${ic('trash', 20)}${T('நீக்கு', 'Delete')}</button>` : ''}`;
+  openSheet(T('லாபத்திலிருந்து எடு', 'Take from profit'), body, `<button class="btn block" id="st-save">${ic('check', 22, 3)}${T('சேமி', 'Save')}</button>`);
+  $('#st-save').onclick = async () => {
+    const amt = Math.round(Number($('#st-amt').value || 0) * 100);
+    if (!Number.isSafeInteger(amt) || amt <= 0 || amt > 1e14) { toast(T('தொகையை அடிக்கவும்', 'Please type the amount')); return; }
+    const rec = { id: edit ? edit.id : (book.putSettle ? 'settle-' + uid() : uid()), kind: 'settle', acc: a.id, dir: -1, amt, date: $('#st-date').value || today(), time: '00:00', note: $('#st-note').value.trim(), party: '', cat: 'Settled', noBal: true, profit: 0, comm: 0, files: [], created: edit ? edit.created : Date.now(), updated: Date.now() };
+    $('#st-save').disabled = true;
+    try { if (book.putSettle) await book.putSettle(rec); else await book.putEntry(rec, []); closeSheet(); ctx.render(); toast(T('சேமிக்கப்பட்டது', 'Saved')); }
+    catch (e) { toast(ctx.errorText(e)); $('#st-save').disabled = false; }
+  };
+  if (edit) $('#st-del').onclick = async () => {
+    if (!await confirmBox(T('நீக்கவா?', 'Delete?'), T('இந்தப் பதிவு நீக்கப்படும்.', 'This entry will be deleted.'), T('நீக்கு', 'Delete'), true)) return;
+    try { if (book.deleteSettle) await book.deleteSettle(edit.id); else await book.deleteEntry(edit.id); ctx.render(); toast(T('நீக்கப்பட்டது', 'Deleted')); } catch (e) { toast(ctx.errorText(e)); }
+  };
+}
 
 /* ---------------- Account ---------------- */
 export function viewAccount(ctx, book, a) {
@@ -93,7 +134,7 @@ export function viewAccount(ctx, book, a) {
   const t = accountTotals(book, a, from, to);
   const groups = new Map();
   t.rows.slice().reverse().forEach(r => { if (!groups.has(r.e.date)) groups.set(r.e.date, []); groups.get(r.e.date).push(r); });
-  const hasProfit = t.profit || t.comm || a.rate;
+  const hasProfit = !!(t.gross || t.comm || t.settled || hasRates(a));
   return `<div class="topbar"><button class="icon-btn" data-go="${book.prefix.replace(/-$/, '')}" aria-label="${T('பின்', 'Back')}">${ic('back')}</button>
     <h1>${esc(a.name)}${a.phone ? `<span class="sub">${esc(a.phone)}</span>` : book.kind === 'group' ? `<span class="sub line-blue">${esc(book.name)}</span>` : ''}</h1>
     <button class="icon-btn" data-act="acc-menu" data-id="${esc(a.id)}" aria-label="${T('விருப்பங்கள்', 'Options')}">${ic('dots', 22, 3)}</button></div>
@@ -104,8 +145,9 @@ export function viewAccount(ctx, book, a) {
         <div class="pill"><small><i class="dot in"></i>${T('வரவு', 'In')}</small><b class="num">${money(t.inn)}</b></div>
         <div class="pill"><small><i class="dot out"></i>${T('செலவு', 'Out')}</small><b class="num">${money(t.out)}</b></div>
       </div>
-      ${(t.open || hasProfit) ? `<div class="hero-foot"><span>${T('தொடக்க இருப்பு', 'Opening')} ${money(t.open)}</span>${hasProfit ? `<span>${T('லாபம்', 'Profit')} ${money(t.profit)}</span>` : ''}</div>` : ''}
+      ${t.open ? `<div class="hero-foot"><span>${T('தொடக்க இருப்பு', 'Opening')} ${money(t.open)}</span></div>` : ''}
     </section>
+    ${hasProfit ? profitCard(book, a, t) : ''}
     ${periodChips(ctx.ui.period, 'acc')}${ctx.ui.period === 'custom' ? customDates(ctx.ui.custom, 'acc') : ''}
     ${t.rows.length ? [...groups].map(([d, rows]) => {
       const di = rows.reduce((n, r) => n + (counts(r.e) && r.e.dir > 0 ? r.e.amt : 0), 0), dout = rows.reduce((n, r) => n + (counts(r.e) && r.e.dir < 0 ? r.e.amt : 0), 0);
@@ -121,7 +163,7 @@ export function viewReport(ctx, book) {
   const tot = allTotals(book, from, to, ids);
   const accs = book.accounts.filter(a => !ids || ids.includes(a.id)).map(a => ({ a, t: accountTotals(book, a, from, to) }));
   const rangeTxt = from || to ? `${niceDate(from) || '…'} – ${niceDate(to) || '…'}` : T('எல்லா நாட்களும்', 'All time');
-  const group = book.kind === 'group';
+  const group = book.kind === 'group', anyP = accs.some(x => x.t.gross || x.t.settled);
   return `<div class="topbar">${group ? `<button class="icon-btn" data-go="${book.prefix.replace(/-$/, '')}" aria-label="back">${ic('back')}</button>` : `<span class="logo">${ic('chart', 22).replace('currentColor', '#fff')}</span>`}<h1>${T('அறிக்கை', 'Report')}<span class="sub">${group ? esc(book.name) + ' · ' : ''}${esc(rangeTxt)}</span></h1></div>
     ${periodChips(ctx.ui.rPeriod, 'rep')}${ctx.ui.rPeriod === 'custom' ? customDates(ctx.ui.rCustom, 'rep') : ''}
     <div class="chips mt4"><button class="chip ${!ids ? 'on' : ''}" data-act="racc" data-id="">${T('எல்லா கணக்கும்', 'All accounts')}</button>${book.accounts.map(a => `<button class="chip ${ids && ids[0] === a.id ? 'on' : ''}" data-act="racc" data-id="${esc(a.id)}">${esc(a.name)}</button>`).join('')}</div>
@@ -130,13 +172,16 @@ export function viewReport(ctx, book) {
       <div class="stat"><small><i class="dot out"></i>${T('செலவு', 'Money out')}</small><b class="num out">${money(tot.out)}</b></div>
       <div class="stat"><small>${T('வித்தியாசம் (வரவு − செலவு)', 'Difference (in − out)')}</small><b class="num ${tot.inn - tot.out < 0 ? 'out' : 'in'}">${money(tot.inn - tot.out)}</b></div>
       <div class="stat"><small>${T('முடிவு இருப்பு', 'Closing balance')}</small><b class="num">${money(tot.bal)}</b></div>
-      ${tot.profit || tot.comm ? `<div class="stat wide"><small>${T('லாபம்', 'Profit')}${tot.comm ? ' · ' + T('கமிஷன் கழித்து', 'after commission') + ' ' + money(tot.comm) : ''}</small><b class="num in">${money(tot.profit)}</b></div>` : ''}
+      ${tot.gross || tot.comm || tot.settled ? `<div class="stat"><small>${T('லாபம்', 'Profit')}</small><b class="num in">${money(tot.gross)}</b></div>
+      ${tot.comm ? `<div class="stat"><small>${T('கொடுக்க வேண்டிய கமிஷன்', 'Commission payable')}</small><b class="num out">${money(tot.comm)}</b></div><div class="stat"><small>${T('நிகர லாபம்', 'Net profit')}</small><b class="num in">${money(tot.profit)}</b></div>` : ''}
+      ${tot.settled ? `<div class="stat"><small>${T('லாபத்திலிருந்து எடுத்தது', 'Taken from profit')}</small><b class="num amber">${money(tot.settled)}</b></div>` : ''}
+      <div class="stat ${(tot.comm ? 1 : 0) + (tot.settled ? 1 : 0) === 1 ? '' : 'wide'}"><small>${T('கையிருப்பு லாபம்', 'Profit in hand')}</small><b class="num ${tot.inHand < 0 ? 'out' : 'in'}">${money(tot.inHand)}</b></div>` : ''}
     </div>
     <div class="card chart">${chart(book, from, to, ids)}</div>
     <div class="row2 mt12"><button class="btn" data-act="pdf">${ic('pdf', 20)}PDF</button><button class="btn ghost" data-act="csv">${ic('excel', 20)}Excel</button></div>
     <div class="section-h"><h2>${T('கணக்கு வாரியாக', 'By account')}</h2></div>
-    <div class="card clip"><table class="table num"><thead><tr><th>${T('கணக்கு', 'Account')}</th><th>${T('வரவு', 'In')}</th><th>${T('செலவு', 'Out')}</th><th>${T('இருப்பு', 'Bal')}</th></tr></thead><tbody>
-      ${accs.map(({ a, t }) => `<tr class="click" data-go="${accRoute(book, a.id)}"><td>${esc(a.name)}</td><td class="in">${money(t.inn)}</td><td class="out">${money(t.out)}</td><td>${money(t.bal)}</td></tr>`).join('') || `<tr><td colspan="4" class="muted">${T('கணக்கு இல்லை', 'No accounts')}</td></tr>`}
+    <div class="card clip"><table class="table num"><thead><tr><th>${T('கணக்கு', 'Account')}</th><th>${T('வரவு', 'In')}</th><th>${T('செலவு', 'Out')}</th>${anyP ? `<th>${T('லாபம்', 'Profit')}</th>` : ''}<th>${T('இருப்பு', 'Bal')}</th></tr></thead><tbody>
+      ${accs.map(({ a, t }) => `<tr class="click" data-go="${accRoute(book, a.id)}"><td>${esc(a.name)}</td><td class="in">${money(t.inn)}</td><td class="out">${money(t.out)}</td>${anyP ? `<td>${t.gross || t.settled ? money(t.inHand) : ''}</td>` : ''}<td>${money(t.bal)}</td></tr>`).join('') || `<tr><td colspan="5" class="muted">${T('கணக்கு இல்லை', 'No accounts')}</td></tr>`}
     </tbody></table></div>`;
 }
 function chart(book, from, to, ids) {
@@ -180,9 +225,10 @@ export function entrySheet(ctx, book, opts) {
     const acc = book.account(f.acc);
     const suggestions = readOnly ? [] : suggestNotes(book, f.acc, f.dir);
     const title = readOnly ? T('பதிவு', 'Entry') : edit ? T('பதிவைத் திருத்து', 'Edit entry') : (f.dir > 0 ? T('பணம் வந்தது', 'Money in') : T('பணம் போனது', 'Money out'));
-    const rate = f.rate != null ? f.rate : acc ? acc.rate || 0 : 0;
-    const commRate = f.commRate != null ? f.commRate : acc ? acc.commRate || 0 : 0;
-    const pr = calcProfit(acc, amt || 0, f.rate, f.commRate);
+    const dr = dirRates(acc, f.dir);
+    const rate = f.rate != null ? f.rate : dr.rate;
+    const commRate = f.commRate != null ? f.commRate : dr.comm;
+    const pr = calcProfit(acc, amt || 0, f.rate, f.commRate, f.dir);
     const dis = readOnly ? 'disabled' : '';
     const body = `
       ${edit && edit.locked ? `<div class="row card rounded mb12"><span class="ic amber">${ic('info')}</span><span class="tx"><b>${T('பார்க்க மட்டும்', 'View only')}</b><small>${T('இது பழைய ஆப்பின் சிறப்புப் பதிவு (Hold / In+Out / Fund). அதை பழைய ஆப்பில் திருத்தவும்.', 'This is a special record from the old app (Hold / In+Out / Fund). Edit it in the old app.')}</small></span></div>` : ''}
@@ -213,7 +259,7 @@ export function entrySheet(ctx, book, opts) {
         <div class="field"><label for="rate">${T('லாபம் %', 'Profit %')}</label><input class="input" type="number" inputmode="decimal" step="0.01" min="0" max="100" id="rate" value="${rate ? rate / 100 : ''}" data-init="${rate ? rate / 100 : ''}" placeholder="0" ${dis}></div>
         <div class="field"><label for="comm">${T('கமிஷன் %', 'Commission %')}</label><input class="input" type="number" inputmode="decimal" step="0.01" min="0" max="100" id="comm" value="${commRate ? commRate / 100 : ''}" data-init="${commRate ? commRate / 100 : ''}" placeholder="0" ${dis}></div>
       </div>
-      ${(rate || commRate) && amt && !edit?.imported ? `<div class="calc-preview">${T('லாபம்', 'Profit')}: ${money(pr.profit + pr.comm)}${pr.comm ? ` − ${T('கமிஷன்', 'commission')} ${money(pr.comm)} = ${money(pr.profit)}` : ''}</div>` : ''}
+      ${(rate || commRate) && amt && !edit?.imported ? `<div class="calc-preview">${T('லாபம்', 'Profit')}: ${money(pr.gross)}${pr.comm ? ` − ${T('கமிஷன்', 'commission')} ${money(pr.comm)} = ${T('நிகர லாபம்', 'Net profit')} ${money(pr.profit)}` : ''}</div>` : ''}
       ${edit && edit.imported && (edit.profit || edit.comm) ? `<div class="calc-preview">${T('லாபம்', 'Profit')}: ${money(edit.profit)}${edit.comm ? ' · ' + T('கமிஷன்', 'commission') + ' ' + money(edit.comm) : ''}${edit.commPaid ? ' · ' + T('செலுத்தியது', 'paid') + ' ' + money(edit.commPaid) : ''}</div>` : ''}
       <div class="field"><span class="lbl">${T('படம் / ரசீது', 'Photo / receipt')}</span>
         <div class="files">${f.files.map((x, i) => `<span class="file">📎<span>${esc(x.name)}</span><button data-e="open-file" data-i="${i}" aria-label="open">${ic('search', 16)}</button>${readOnly ? '' : `<button data-e="rm-file" data-i="${i}" aria-label="remove">${ic('x', 16)}</button>`}</span>`).join('')}
@@ -238,7 +284,7 @@ export function entrySheet(ctx, book, opts) {
     if (g('new-acc')) st.newName = g('new-acc').value;
     if (g('time')) f.time = g('time').value || '00:00';
     if (g('party')) f.party = g('party').value.trim();
-    const pct = (el, k) => { if (!el || el.value === el.dataset.init) return; const v = el.value.trim(); f[k] = v === '' ? (book.account(f.acc) && book.account(f.acc)[k === 'rate' ? 'rate' : 'commRate'] ? 0 : null) : pctToBp(v); el.dataset.init = el.value; };
+    const pct = (el, k) => { if (!el || el.value === el.dataset.init) return; const v = el.value.trim(); f[k] = v === '' ? (dirRates(book.account(f.acc), f.dir)[k === 'rate' ? 'rate' : 'comm'] ? 0 : null) : pctToBp(v); el.dataset.init = el.value; };
     pct(g('rate'), 'rate'); pct(g('comm'), 'commRate');
   }
   function key(k) {
@@ -272,8 +318,8 @@ export function entrySheet(ctx, book, opts) {
         else { const a = { id: uid(), name: name.slice(0, 80), phone: '', opening: 0, rate: 0, commRate: 0, note: '', created: Date.now() }; await book.putAccount(a); accId = a.id; }
       }
       const acc = book.account(accId);
-      const changedMoney = !edit || edit.amt !== amt || (edit.rate ?? null) !== (f.rate ?? null) || (edit.commRate ?? null) !== (f.commRate ?? null) || edit.acc !== accId;
-      const pr = changedMoney || !edit.imported ? calcProfit(acc, amt, f.rate, f.commRate) : { profit: edit.profit, comm: edit.comm };
+      const changedMoney = !edit || edit.amt !== amt || edit.dir !== f.dir || (edit.rate ?? null) !== (f.rate ?? null) || (edit.commRate ?? null) !== (f.commRate ?? null) || edit.acc !== accId;
+      const pr = changedMoney || !edit.imported ? calcProfit(acc, amt, f.rate, f.commRate, f.dir) : { profit: edit.profit, comm: edit.comm };
       const rec = {
         id: edit ? edit.id : uid(), acc: accId, dir: f.dir, amt, date: f.date || today(), time: f.time || '00:00', note: f.note, party: f.party,
         cat: edit ? edit.cat || '' : '', rate: f.rate ?? null, commRate: f.commRate ?? null, profit: pr.profit, comm: pr.comm, files: f.files,
@@ -325,7 +371,7 @@ export function entrySheet(ctx, book, opts) {
 /* ---------------- Account sheet & menu ---------------- */
 export function accountSheet(ctx, book, a) {
   const edit = !!a;
-  a = a || { name: '', phone: '', opening: 0, rate: 0, commRate: 0, note: '' };
+  a = a || { name: '', phone: '', opening: 0, rate: 0, commRate: 0, fin: null, note: '' };
   const group = book.kind === 'group';
   const body = `
     <div class="field"><label for="a-name">${T('பெயர்', 'Name')} *</label><input class="input" id="a-name" maxlength="80" value="${esc(a.name)}" placeholder="${T('உதா: முருகன், கடை, வீட்டுச் செலவு', 'e.g. Murugan, Shop, Home')}"></div>
@@ -334,10 +380,11 @@ export function accountSheet(ctx, book, a) {
       <div class="flex8"><span class="seg"><button type="button" id="a-sign-p" class="${a.opening >= 0 ? 'on' : ''}">+</button><button type="button" id="a-sign-m" class="${a.opening < 0 ? 'on' : ''}">−</button></span>
       <input class="input" id="a-open" type="number" inputmode="decimal" step="0.01" min="0" value="${a.opening ? Math.abs(a.opening) / 100 : ''}" placeholder="0"></div>
       <p class="note">${T('ஏற்கனவே இருக்கும் பணம் அல்லது பாக்கி. + = கையில் / வர வேண்டியது, − = கொடுக்க வேண்டியது.', 'Money you already have or owe. + = have / to receive, − = to pay.')}</p></div>
-    <details class="mt14" ${a.rate || a.commRate ? 'open' : ''}><summary class="summary">${T('வியாபாரத்துக்கு: லாபம் / கமிஷன் %', 'For business: profit / commission %')}</summary>
-      <div class="row2"><div class="field"><label for="a-rate">${T('லாபம் %', 'Profit %')}</label><input class="input" id="a-rate" type="number" inputmode="decimal" step="0.01" min="0" max="100" value="${a.rate ? a.rate / 100 : ''}" placeholder="0"></div>
-      <div class="field"><label for="a-comm">${T('கமிஷன் %', 'Commission %')}</label><input class="input" id="a-comm" type="number" inputmode="decimal" step="0.01" min="0" max="100" value="${a.commRate ? a.commRate / 100 : ''}" placeholder="0"></div></div>
-      <p class="note">${T('ஒவ்வொரு பதிவிலும் இந்த % படி லாபம் தானாகக் கணக்கிடப்படும்.', 'Profit is calculated automatically for every entry.')}</p></details>
+    <details class="mt14" ${hasRates(a) ? 'open' : ''}><summary class="summary">${T('வியாபாரத்துக்கு: லாபம் / கமிஷன் %', 'For business: profit / commission %')}</summary>
+      ${(() => { const r = accRates(a), v = k => r[k] ? r[k] / 100 : '', fld = (k, ta, en) => `<div class="field"><label for="a-${k}">${T(ta, en)}</label><input class="input" id="a-${k}" type="number" inputmode="decimal" step="0.01" min="0" max="100" value="${v(k)}" placeholder="0"></div>`;
+        return `<div class="row2">${fld('inProfit', 'வரவு லாபம் % (விருப்பம்)', 'In profit % (optional)')}${fld('outProfit', 'செலவு லாபம் % (விருப்பம்)', 'Out profit % (optional)')}</div>
+      <div class="row2">${fld('inComm', 'வரவு கொடுக்க வேண்டிய கமிஷன் % (விருப்பம்)', 'In payable commission % (optional)')}${fld('outComm', 'செலவு கொடுக்க வேண்டிய கமிஷன் % (விருப்பம்)', 'Out payable commission % (optional)')}</div>`; })()}
+      <p class="note">${T('ஒவ்வொரு பதிவிலும் லாபம் = தொகை × லாபம் % − தொகை × கமிஷன் %. வரவுக்கும் செலவுக்கும் தனித்தனியாக.', 'Profit for every entry = amount × profit % − amount × commission % — separately for money in and money out.')}</p></details>
     ${edit ? `<button class="btn danger block mt18" id="a-del">${ic('trash', 20)}${T('இந்தக் கணக்கை நீக்கு', 'Delete this account')}</button>` : ''}`;
   openSheet(edit ? T('கணக்கைத் திருத்து', 'Edit account') : T('புதிய கணக்கு', 'New account'), body, `<button class="btn block" id="a-save">${ic('check', 22, 3)}${T('சேமி', 'Save')}</button>`);
   let neg = a.opening < 0;
@@ -348,10 +395,21 @@ export function accountSheet(ctx, book, a) {
     const name = $('#a-name').value.trim();
     if (!name) { toast(T('பெயர் தேவை', 'Name is required')); $('#a-name').focus(); return; }
     const open = Math.round(Math.abs(Number($('#a-open').value || 0)) * 100) * (neg ? -1 : 1);
-    const rec = Object.assign({}, a, { name, phone: $('#a-phone') ? $('#a-phone').value.trim() : '', opening: Number.isSafeInteger(open) ? open : 0, rate: pctToBp($('#a-rate').value) || 0, commRate: pctToBp($('#a-comm').value) || 0 });
+    const rec = Object.assign({}, a, { name, phone: $('#a-phone') ? $('#a-phone').value.trim() : '', opening: Number.isSafeInteger(open) ? open : 0, rate: 0, commRate: 0 });
+    const fin = {}; RATE_KEYS.forEach(k => { fin[k] = pctToBp($('#a-' + k).value) || 0; });
+    rec.fin = fin; rec.rate = fin.inProfit; rec.commRate = fin.inComm;
+    // Entries that follow this account's % (no own %) can be recalculated with the new %.
+    const before = accRates(a), changed = edit && RATE_KEYS.some(k => before[k] !== fin[k]);
+    const follow = changed && book.kind === 'local' ? book.entries.filter(e => e.acc === a.id && !e.imported && !isSettle(e) && e.rate == null && e.commRate == null) : [];
     if (!edit) { rec.id = uid(); rec.created = Date.now(); }
     $('#a-save').disabled = true;
-    try { await book.putAccount(rec); closeSheet(); if (!edit) ctx.go(accRoute(book, rec.id)); else ctx.render(); toast(T('சேமிக்கப்பட்டது', 'Saved')); }
+    try {
+      await book.putAccount(rec);
+      if (follow.length && await confirmBox(T('பழைய பதிவுகளுக்கும் புதிய %?', 'Apply the new % to old entries?'), TP('இந்தக் கணக்கின் % பயன்படுத்தும் {n} பதிவுகளின் லாபம் புதிய %-படி மாற்றப்படும். தனி % கொடுத்த பதிவுகள் மாறாது.', 'Profit of {n} entries that use this account’s % will be recalculated. Entries with their own % stay as they are.', { n: follow.length }), T('பொருத்து', 'Apply'))) {
+        for (const e of follow) { const pr = calcProfit(rec, e.amt, null, null, e.dir); await book.putEntry(Object.assign({}, e, { profit: pr.profit, comm: pr.comm, updated: Date.now() }), []); }
+      }
+      closeSheet(); if (!edit) ctx.go(accRoute(book, rec.id)); else ctx.render(); toast(T('சேமிக்கப்பட்டது', 'Saved'));
+    }
     catch (e) { toast(ctx.errorText(e)); $('#a-save').disabled = false; }
   };
   if (edit) $('#a-del').onclick = async () => {
@@ -379,35 +437,94 @@ export function accountShareText(book, a) {
 }
 
 /* ---------------- PDF & CSV ---------------- */
-export function printReport(ctx, book, accIds, from, to, title) {
+/* PDF columns the user can tick on / off (remembered on this device). */
+const PDF_COLS = () => [
+  ['open', T('தொடக்க இருப்பு', 'Opening balance')], ['inn', T('வரவு', 'Money in')], ['out', T('செலவு', 'Money out')],
+  ['gross', T('லாபம்', 'Profit')], ['comm', T('கொடுக்க வேண்டிய கமிஷன்', 'Commission payable')], ['net', T('நிகர லாபம்', 'Net profit')],
+  ['settled', T('லாபத்திலிருந்து எடுத்தது', 'Taken from profit')], ['inHand', T('கையிருப்பு லாபம்', 'Profit in hand')], ['bal', T('இருப்பு', 'Balance')],
+  ['note', T('விவரம் / குறிப்பு', 'Details / note')]
+];
+const pdfPrefs = () => { try { return JSON.parse(ls.get('tl4-pdf-cols', '{}')) || {}; } catch (e) { return {}; } };
+export function pdfOptions(ctx, book, accIds, from, to, title) {
+  const per = book.accounts.filter(a => !accIds || accIds.includes(a.id)).map(a => accountTotals(book, a, from, to));
+  const has = { gross: per.some(t => t.gross), comm: per.some(t => t.comm), net: per.some(t => t.comm), settled: per.some(t => t.settled), inHand: per.some(t => t.gross || t.settled), note: accIds && accIds.length === 1 };
+  const pref = pdfPrefs();
+  const cols = PDF_COLS().filter(([k]) => has[k] !== false && (has[k] === undefined || has[k]));
+  openSheet(T('PDF-ல் என்ன காட்ட வேண்டும்?', 'What should the PDF show?'), `<div class="menu">${cols.map(([k, label]) => `<label class="row"><span class="tx"><b>${label}</b></span><input type="checkbox" class="check24" data-col="${k}" ${pref[k] === false ? '' : 'checked'}></label>`).join('')}</div>
+    <p class="note">${T('ஒரே A4 பக்கத்தில் பொருந்தும்படி தானாக அளவு மாறும்.', 'It is sized automatically to fit one A4 page.')}</p>`,
+    `<button class="btn block" id="pdf-go">${ic('pdf', 20)}${T('PDF எடு', 'Make PDF')}</button>`);
+  $('#pdf-go').onclick = () => {
+    const p2 = pdfPrefs(); document.querySelectorAll('#sheet-root [data-col]').forEach(el => { p2[el.dataset.col] = el.checked; }); ls.set('tl4-pdf-cols', JSON.stringify(p2));
+    closeSheet(true); printReport(ctx, book, accIds, from, to, title, p2);
+  };
+}
+export function printReport(ctx, book, accIds, from, to, title, prefs) {
+  const pref = prefs || pdfPrefs(), on = k => pref[k] !== false;
   const accs = book.accounts.filter(a => !accIds || accIds.includes(a.id));
   const tot = allTotals(book, from, to, accIds);
   const range = from || to ? `${dmy(from) || '…'} → ${dmy(to) || '…'}` : T('எல்லா நாட்களும்', 'All time');
-  const anyProfit = accs.some(a => accountTotals(book, a, from, to).profit);
-  let html = `<div class="pr-h"><div><h1>${esc(title)}</h1><p>${esc(range)}${book.kind === 'group' ? ' · ' + esc(book.name) : ''}</p></div><p>Team Ledger · ${new Date().toLocaleString('en-IN')}</p></div>
-    <div class="pr-sum"><div><small>${T('வரவு', 'Money in')}</small><b class="pr-in">${money(tot.inn)}</b></div><div><small>${T('செலவு', 'Money out')}</small><b class="pr-out">${money(tot.out)}</b></div><div><small>${T('இருப்பு', 'Balance')}</small><b>${money(tot.bal)}</b></div>${anyProfit ? `<div><small>${T('லாபம்', 'Profit')}</small><b>${money(tot.profit)}</b></div>` : ''}</div>`;
-  for (const a of accs) {
-    const t = accountTotals(book, a, from, to);
-    html += `<h2 class="pr-acc">${esc(a.name)} <small>· ${T('தொடக்கம்', 'Opening')} ${money(t.open)} · ${T('முடிவு', 'Closing')} ${money(t.bal)}</small></h2>
-      <table class="pr-t"><thead><tr><th>${T('தேதி', 'Date')}</th><th>${T('விவரம்', 'Details')}</th><th class="r">${T('வரவு', 'In')}</th><th class="r">${T('செலவு', 'Out')}</th>${anyProfit ? `<th class="r">${T('லாபம்', 'Profit')}</th>` : ''}<th class="r">${T('இருப்பு', 'Balance')}</th></tr></thead><tbody>
-      ${t.rows.map(({ e, bal }) => `<tr><td>${dmy(e.date)}${e.time && e.time !== '00:00' ? '<br><small>' + niceTime(e.time) + '</small>' : ''}</td><td>${esc([e.note, e.party, e.cat].filter(Boolean).join(' · ') || '—')}${!counts(e) ? ' <small>(' + (e.pending ? T('நிலுவை', 'pending') : T('இருப்பில் இல்லை', 'not in balance')) + ')</small>' : ''}</td>
-        <td class="r pr-in">${e.dir > 0 ? money(e.amt) : ''}</td><td class="r pr-out">${e.dir < 0 ? money(e.amt) : ''}</td>${anyProfit ? `<td class="r">${e.profit ? money(e.profit) : ''}</td>` : ''}<td class="r">${money(bal)}</td></tr>`).join('') || `<tr><td colspan="6">${T('பதிவு இல்லை', 'No entries')}</td></tr>`}
-      <tr class="pr-total"><td></td><td><b>${T('மொத்தம்', 'Total')}</b></td><td class="r pr-in"><b>${money(t.inn)}</b></td><td class="r pr-out"><b>${money(t.out)}</b></td>${anyProfit ? `<td class="r"><b>${money(t.profit)}</b></td>` : ''}<td class="r"><b>${money(t.bal)}</b></td></tr></tbody></table>`;
+  const per = accs.map(a => ({ a, t: accountTotals(book, a, from, to) }));
+  const any = { gross: per.some(x => x.t.gross || x.t.settled), comm: per.some(x => x.t.comm), settled: per.some(x => x.t.settled) };
+  const C = { open: on('open'), inn: on('inn'), out: on('out'), gross: any.gross && on('gross'), comm: any.comm && on('comm'), net: any.comm && on('net'), settled: any.settled && on('settled'), inHand: any.gross && on('inHand'), bal: on('bal'), note: on('note') };
+  const L = { inn: T('வரவு', 'Money in'), out: T('செலவு', 'Money out'), bal: T('இருப்பு', 'Balance'), gross: T('லாபம்', 'Profit'), comm: T('கொடுக்க வேண்டிய கமிஷன்', 'Commission payable'), net: T('நிகர லாபம்', 'Net profit'), settled: T('லாபத்திலிருந்து எடுத்தது', 'Taken from profit'), inHand: T('கையிருப்பு லாபம்', 'Profit in hand') };
+  const box = (k, v, cls) => C[k] ? `<div><small>${L[k]}</small><b class="${cls || ''}">${money(v)}</b></div>` : '';
+  const m0 = v => v ? money(v) : '';
+  let html = `<div class="pr-h"><div><h1>${esc(title)}</h1><p>${esc(range)}${book.kind === 'group' ? ' · ' + esc(book.name) : ''}</p></div><p>Team Ledger · ${new Date().toLocaleString(locale())}</p></div>
+    <div class="pr-sum">${box('inn', tot.inn, 'pr-in')}${box('out', tot.out, 'pr-out')}${box('gross', tot.gross)}${box('comm', tot.comm, 'pr-out')}${box('net', tot.profit, 'pr-in')}${box('settled', tot.settled)}${box('inHand', tot.inHand, 'pr-in')}${box('bal', tot.bal)}</div>`;
+  if (accs.length > 1) {
+    // One-page summary: one row per account, sized to fit a single A4 sheet.
+    const cols = [
+      ['open', T('தொடக்கம்', 'Opening'), t => m0(t.open), ''], ['inn', T('வரவு', 'In'), t => m0(t.inn), 'pr-in'], ['out', T('செலவு', 'Out'), t => m0(t.out), 'pr-out'],
+      ['gross', T('லாபம்', 'Profit'), t => m0(t.gross), ''], ['comm', T('கமிஷன்', 'Commission'), t => m0(t.comm), 'pr-out'], ['net', L.net, t => t.gross || t.comm ? money(t.profit) : '', 'pr-in'],
+      ['settled', T('எடுத்தது', 'Taken'), t => m0(t.settled), ''], ['inHand', T('கையிருப்பு', 'In hand'), t => t.gross || t.settled ? money(t.inHand) : '', 'pr-in'], ['bal', T('இருப்பு', 'Balance'), t => `<b>${money(t.bal)}</b>`, '']
+    ].filter(c => C[c[0]]);
+    const sum = { open: per.reduce((n, x) => n + x.t.open, 0), inn: tot.inn, out: tot.out, gross: tot.gross, comm: tot.comm, net: tot.profit, settled: tot.settled, inHand: tot.inHand, bal: tot.bal };
+    html += `<table class="pr-t"><thead><tr><th>#</th><th>${T('கணக்கு', 'Account')}</th>${cols.map(c => `<th class="r">${c[1]}</th>`).join('')}</tr></thead><tbody>
+      ${per.map(({ a, t }, i) => `<tr><td>${i + 1}</td><td>${esc(a.name)}</td>${cols.map(c => `<td class="r ${c[3]}">${c[2](t)}</td>`).join('')}</tr>`).join('')}
+      <tr class="pr-total"><td></td><td><b>${T('மொத்தம்', 'Total')}</b></td>${cols.map(c => `<td class="r ${c[3]}"><b>${money(sum[c[0]])}</b></td>`).join('')}</tr></tbody></table>`;
+  } else {
+    for (const { a, t } of per) {
+      const cols = [
+        ['inn', T('வரவு', 'In'), (e) => e.dir > 0 && !isSettle(e) ? money(e.amt) : '', 'pr-in', t.inn], ['out', T('செலவு', 'Out'), (e) => e.dir < 0 && !isSettle(e) ? money(e.amt) : '', 'pr-out', t.out],
+        ['gross', T('லாபம்', 'Profit'), (e) => isSettle(e) ? '−' + moneyAbs(e.amt) : m0((e.profit || 0) + (e.comm || 0)), '', t.gross - t.settled], ['comm', T('கமிஷன்', 'Commission'), (e) => m0(e.comm), 'pr-out', t.comm],
+        ['bal', T('இருப்பு', 'Balance'), (e, bal) => money(bal), '', t.bal]
+      ].filter(c => C[c[0]]);
+      html += `<h2 class="pr-acc">${esc(a.name)} <small>${C.open ? '· ' + T('தொடக்கம்', 'Opening') + ' ' + money(t.open) + ' ' : ''}· ${T('முடிவு', 'Closing')} ${money(t.bal)}</small></h2>
+      <table class="pr-t"><thead><tr><th>${T('தேதி', 'Date')}</th>${C.note ? `<th>${T('விவரம்', 'Details')}</th>` : ''}${cols.map(c => `<th class="r">${c[1]}</th>`).join('')}</tr></thead><tbody>
+      ${t.rows.map(({ e, bal }) => `<tr><td>${dmy(e.date)}${e.time && e.time !== '00:00' ? ' <small>' + niceTime(e.time) + '</small>' : ''}</td>${C.note ? `<td>${isSettle(e) ? esc(e.note || '') + ' <small>(' + L.settled + ')</small>' : esc([e.note, e.party, e.cat].filter(Boolean).join(' · ') || '—') + (!counts(e) ? ' <small>(' + (e.pending ? T('நிலுவை', 'pending') : T('இருப்பில் இல்லை', 'not in balance')) + ')</small>' : '')}</td>` : ''}${cols.map(c => `<td class="r ${c[3]}">${c[2](e, bal)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="8">${T('பதிவு இல்லை', 'No entries')}</td></tr>`}
+      <tr class="pr-total"><td>${C.note ? '' : `<b>${T('மொத்தம்', 'Total')}</b>`}</td>${C.note ? `<td><b>${T('மொத்தம்', 'Total')}</b></td>` : ''}${cols.map(c => `<td class="r ${c[3]}"><b>${money(c[4])}</b></td>`).join('')}</tr></tbody></table>`;
+    }
   }
   html += `<p class="pr-f">Team Ledger ${VERSION}</p>`;
-  $('#print-root').innerHTML = html;
+  const root = $('#print-root');
+  root.innerHTML = `<div class="pr-page">${html}</div>`;
+  fitToA4(root.firstChild);
   const ascii = String(title).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   const fname = ('Team-Ledger-' + (ascii || 'Statement')).slice(0, 70) + '-' + today();
   if (ctx.preview) { toast(T('PDF Android ஆப்பில் மட்டும். Excel பயன்படுத்தலாம்.', 'PDF works in the Android app. Use Excel here.')); return; }
   setTimeout(() => { if (!native.print(fname)) { const old = document.title; document.title = fname; window.print(); setTimeout(() => { document.title = old; }, 1000); } }, 80);
 }
+/* Measure the printed page off-screen and shrink it so it fits on one A4 sheet (190 × 277 mm printable). */
+export function fitToA4(page) {
+  page.style.zoom = '';
+  const probe = document.createElement('div'); probe.className = 'pr-measure'; probe.appendChild(page.cloneNode(true)); document.body.appendChild(probe);
+  const el = probe.firstChild, mm = el.offsetWidth / 190, h = el.scrollHeight; probe.remove();
+  const z = Math.min(1, (272 * mm) / Math.max(1, h));
+  if (z < 1) page.style.zoom = Math.max(0.5, z).toFixed(3);
+  return z;
+}
 export function csvReport(book, accIds, from, to) {
   const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-  const rows = [['Account', 'Date', 'Time', 'In', 'Out', 'Profit', 'Balance', 'Note', 'From/To', 'Type', 'Counted'].map(q).join(',')];
+  const rows = [['Account', 'Date', 'Time', 'In', 'Out', 'Profit', 'Commission payable', 'Net profit', 'Taken from profit', 'Balance', 'Note', 'From/To', 'Type', 'Counted'].map(q).join(',')];
   for (const a of book.accounts.filter(a => !accIds || accIds.includes(a.id))) {
     const t = accountTotals(book, a, from, to);
-    rows.push([a.name, from || '', '', '', '', '', (t.open / 100).toFixed(2), 'Opening balance', '', '', ''].map(q).join(','));
-    for (const { e, bal } of t.rows) rows.push([a.name, e.date, e.time, e.dir > 0 ? (e.amt / 100).toFixed(2) : '', e.dir < 0 ? (e.amt / 100).toFixed(2) : '', e.profit ? (e.profit / 100).toFixed(2) : '', (bal / 100).toFixed(2), e.note, e.party, e.cat, counts(e) ? 'yes' : 'no'].map(q).join(','));
+    rows.push([a.name, from || '', '', '', '', '', '', '', '', (t.open / 100).toFixed(2), 'Opening balance', '', '', ''].map(q).join(','));
+    const r2 = v => v ? (v / 100).toFixed(2) : '';
+    for (const { e, bal } of t.rows) {
+      if (isSettle(e)) { rows.push([a.name, e.date, e.time, '', '', '', '', '', r2(e.amt), (bal / 100).toFixed(2), e.note, '', 'Taken from profit', 'no'].map(q).join(',')); continue; }
+      rows.push([a.name, e.date, e.time, e.dir > 0 ? r2(e.amt) : '', e.dir < 0 ? r2(e.amt) : '', r2((e.profit || 0) + (e.comm || 0)), r2(e.comm), r2(e.profit), '', (bal / 100).toFixed(2), e.note, e.party, e.cat, counts(e) ? 'yes' : 'no'].map(q).join(','));
+    }
+    if (t.gross || t.settled) rows.push([a.name, 'TOTAL', '', r2(t.inn), r2(t.out), r2(t.gross), r2(t.comm), r2(t.profit), r2(t.settled), (t.bal / 100).toFixed(2), 'Profit in hand ' + (t.inHand / 100).toFixed(2), '', '', ''].map(q).join(','));
   }
   saveFile('Team-Ledger-' + (book.kind === 'group' ? 'Group-' : '') + today() + '.csv', '﻿' + rows.join('\r\n'), 'text/csv');
 }
@@ -415,16 +532,17 @@ export function csvReport(book, accIds, from, to) {
 /* Shared action handlers for ledger screens. */
 export const ledgerActions = {
   'new-entry': (ctx, b) => { const book = ctx.book(); if (!book.canEdit) return toast(T('பார்க்க மட்டும் அனுமதி', 'View-only access')); entrySheet(ctx, book, { dir: Number(b.dataset.dir), acc: b.dataset.acc || '' }); },
-  'edit-entry': (ctx, b) => entrySheet(ctx, ctx.book(), { id: b.dataset.id }),
+  'edit-entry': (ctx, b) => { const book = ctx.book(), e = book.entries.find(x => x.id === b.dataset.id); if (e && isSettle(e)) { if (!book.canEdit) return toast(T('பார்க்க மட்டும் அனுமதி', 'View-only access')); return settleSheet(ctx, book, book.account(e.acc), e); } entrySheet(ctx, book, { id: b.dataset.id }); },
+  'settle-new': (ctx, b) => { const book = ctx.book(); settleSheet(ctx, book, book.account(b.dataset.acc)); },
   'new-account': ctx => accountSheet(ctx, ctx.book(), null),
   'acc-menu': (ctx, b) => accountMenu(ctx, ctx.book(), ctx.book().account(b.dataset.id)),
   'acc-edit': (ctx, b) => accountSheet(ctx, ctx.book(), ctx.book().account(b.dataset.id)),
-  'acc-pdf': (ctx, b) => { closeSheet(true); const [f, t] = periodRange(ctx.ui.period, ctx.ui.custom); const book = ctx.book(); printReport(ctx, book, [b.dataset.id], f, t, book.account(b.dataset.id).name); },
+  'acc-pdf': (ctx, b) => { closeSheet(true); const [f, t] = periodRange(ctx.ui.period, ctx.ui.custom); const book = ctx.book(); pdfOptions(ctx, book, [b.dataset.id], f, t, book.account(b.dataset.id).name); },
   'acc-share': (ctx, b) => { closeSheet(true); const book = ctx.book(); shareText(accountShareText(book, book.account(b.dataset.id))); },
   'search': ctx => { ctx.ui.searchOpen = true; ctx.ui.focusSearch = true; ctx.render(); },
   'search-close': ctx => { ctx.ui.searchOpen = false; ctx.ui.q = ''; ctx.render(); },
   'period': (ctx, b) => { if (b.dataset.for === 'acc') ctx.ui.period = b.dataset.k; else ctx.ui.rPeriod = b.dataset.k; ctx.render(); },
   'racc': (ctx, b) => { ctx.ui.rAcc = b.dataset.id; ctx.render(); },
-  'pdf': ctx => { const book = ctx.book(); const [f, t] = periodRange(ctx.ui.rPeriod, ctx.ui.rCustom); const ids = ctx.ui.rAcc && book.account(ctx.ui.rAcc) ? [ctx.ui.rAcc] : null; printReport(ctx, book, ids, f, t, ids ? book.account(ids[0]).name : (book.kind === 'group' ? book.name : T('எல்லா கணக்குகள்', 'All accounts'))); },
+  'pdf': ctx => { const book = ctx.book(); const [f, t] = periodRange(ctx.ui.rPeriod, ctx.ui.rCustom); const ids = ctx.ui.rAcc && book.account(ctx.ui.rAcc) ? [ctx.ui.rAcc] : null; pdfOptions(ctx, book, ids, f, t, ids ? book.account(ids[0]).name : (book.kind === 'group' ? book.name : T('எல்லா கணக்குகள்', 'All accounts'))); },
   'csv': ctx => { const book = ctx.book(); const [f, t] = periodRange(ctx.ui.rPeriod, ctx.ui.rCustom); const ids = ctx.ui.rAcc && book.account(ctx.ui.rAcc) ? [ctx.ui.rAcc] : null; csvReport(book, ids, f, t); }
 };

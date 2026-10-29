@@ -7,13 +7,33 @@ const LIMIT = 50331648;
 const ctx = (group, revision, id = group, kind = 'catalog') => ({ groupId: group, documentId: id, kind, revision, deleted: false });
 const check = ({ data, error }) => { if (error) { const e = Error(error.code === '40001' ? 'Another person changed this account. Refresh before saving / வேறொருவர் மாற்றியுள்ளார். Refresh செய்யவும்.' : error.message); e.code = error.code; throw e; } return data; };
 export class Groups {
-  constructor(client, vault) { this.client = client; this.vault = vault; this.busy = false; this.current = null; }
+  constructor(client, vault) {
+    this.client = client; this.vault = vault; this.busy = false; this.current = null; this.sync = null; this.synced = new Map();
+    // Every new / changed group key is also sent (locked with the login password) to this login's other phones.
+    const put = vault.put.bind(vault);
+    vault.put = async (groupId, raw, epoch, revision) => { await put(groupId, raw, epoch, revision); this.pushKey(groupId, raw, epoch); };
+  }
+  pushKey(groupId, raw, epoch) {
+    if (!this.sync || !/^[0-9a-f-]{36}$/i.test(groupId) || this.synced.get(groupId) === epoch) return;
+    this.sync.upload(groupId, epoch, raw).then(ok => { if (ok) this.synced.set(groupId, epoch); }).catch(() => { });
+  }
+  /** Pull keys saved by this login's other phones, and share the keys this phone has. */
+  async syncAll() {
+    if (!this.sync) return 0;
+    let added = 0;
+    const got = await this.sync.download();
+    for (const g of got) { this.synced.set(g.group, g.epoch); const s = this.vault.get(g.group); if (!s || s.epoch < g.epoch) { await this.vault.put(g.group, g.raw, g.epoch, 0); added++; } }
+    if (!this.sync.available) return added;
+    for (const r of await this.list()) { const s = this.vault.get(r.id); if (s && s.epoch === r.epoch) this.pushKey(r.id, s.raw, r.epoch); }
+    return added;
+  }
   async list() { return check(await this.client.from('tl2_groups').select('id,name,owner_id,revision,epoch').order('name')); }
   async fetchRow(id) { return check(await this.client.from('tl2_groups').select('*').eq('id', id).single()); }
   async create(name) {
     const id = uid(), fresh = await newGroupKey(), ledger = emptyLedger();
     // Persist recoverable key locally BEFORE server creation; a network ambiguity cannot lose it.
-    await this.vault.put(id, fresh.recoveryKey, 1, 1);
+    const sync = this.sync; this.sync = null; // the group does not exist on the server yet
+    try { await this.vault.put(id, fresh.recoveryKey, 1, 1); } finally { this.sync = sync; }
     const envelope = await seal(ledger, fresh.key, ctx(id, 1), LIMIT);
     check(await this.client.rpc('tl2_create', { p_id: id, p_name: name.trim(), p_envelope: envelope }));
     return this.load(id);

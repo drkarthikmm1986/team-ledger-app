@@ -462,12 +462,61 @@ textarea.input{height:auto;min-height:80px;padding:12px 14px;resize:vertical}
 .rep-more summary svg{color:var(--muted);transition:transform .2s} .rep-more[open] summary svg{transform:rotate(90deg)}
 .rep-more .list{padding:0 10px 10px}
 /* ---- import preview ---- */
-.imp-seg{margin-top:4px}
-.imp-sum{display:flex;gap:14px;flex-wrap:wrap;font-weight:800;margin:10px 2px}
-.imp-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden}
-.imp-row{display:grid;grid-template-columns:auto 82px 1fr auto;gap:10px;align-items:center;padding:9px 10px;border-bottom:1px solid var(--line);font-size:14px}
-.imp-row:last-child{border-bottom:0}
-.imp-row .d{font-weight:700;font-size:13px} .imp-row .d small,.imp-row .n small{display:block;font-size:11.5px;color:var(--muted);font-weight:600}
-.imp-row .n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.imp-row.dup{opacity:.55}
-.imp-seg{grid-template-columns:repeat(3,1fr)!important}
+.imp-opt{margin-top:10px} .imp-opt>small{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:0 2px 4px}
+.imp-seg{grid-template-columns:repeat(auto-fit,minmax(0,1fr))!important} .imp-seg button,.imp-seg2 button{font-size:13px;padding:0 6px}
+.imp-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(70px,1fr));gap:8px;margin:12px 0 6px}
+.imp-sum span{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px;min-width:0}
+.imp-sum small{display:block;font-size:11.5px;color:var(--muted);font-weight:650} .imp-sum b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.imp-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:6px 2px 8px;font-size:12.5px} .imp-bar .muted{margin-left:auto}
+.imp-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card)}
+.imp-row{display:grid;grid-template-columns:auto 74px 1fr auto;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);font-size:14px}
+.imp-row button{background:none;border:0;color:inherit;font:inherit;text-align:left;padding:0;min-width:0}
+.imp-row .d{font-weight:700;font-size:12.5px} .imp-row .d small,.imp-row .n small{display:block;font-size:11.5px;color:var(--muted);font-weight:600}
+.imp-row .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.imp-row .io{display:flex;flex-direction:column;align-items:flex-end;padding:5px 9px!important;border-radius:10px!important;border:1px solid currentColor!important}
+.imp-row .io.in{color:var(--in);background:var(--in-soft)!important} .imp-row .io.out{color:var(--out);background:var(--out-soft)!important}
+.imp-row .io small{font-size:10.5px;font-weight:750} .imp-row .io b{font-size:14px}
+.imp-row.dup{opacity:.55} .imp-row.off .n,.imp-row.off .d{opacity:.5}
+.imp-edit{margin:8px;padding:12px;border:2px solid var(--brand)}
+.imp-how .row{padding:10px 12px}
+/* sheets: keep the last row above the phone's navigation bar */
+.sheet{max-height:calc(var(--vvh,100vh) - 12px - var(--safe-t))}
+.sheet .body:last-child{padding-bottom:calc(18px + var(--safe-b))}
+/* ---- 4.1.9: report panels (one per account, swipe), compact journal, date picker ---- */
+.rep-more summary{padding:11px 14px} .rep-more summary b{font-size:15px} .rep-more summary small{font-size:11.5px}
+.rp-tabs{display:flex;gap:6px;overflow-x:auto;padding:0 10px 8px;scrollbar-width:none} .rp-tabs::-webkit-scrollbar{display:none}
+.rp-tabs button{flex:none;height:30px;padding:0 12px;border-radius:15px;border:1px solid var(--line);background:var(--card);color:var(--muted);font:inherit;font-size:12.5px;font-weight:700;white-space:nowrap}
+.rp-tabs button.on{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+.rp-track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:10px;padding:0 10px 10px;scrollbar-width:none;overscroll-behavior-x:contain} .rp-track::-webkit-scrollbar{display:none}
+.rp-panel{flex:0 0 100%;scroll-snap-align:start;min-width:0}
+.rp-h{display:flex;align-items:baseline;gap:8px;padding:2px 2px 6px} .rp-h b{font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .rp-h small{margin-left:auto;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rt-wrap{overflow-x:hidden} .rp-panel .rt-wrap{max-height:62vh;box-shadow:none}
+.rt2{width:100%;table-layout:fixed;font-size:11.5px}
+.rt2 th,.rt2 td{padding:5px 4px;line-height:1.25;overflow:hidden;text-overflow:ellipsis}
+.rt2 thead th{font-size:10px;min-width:0;padding:6px 4px} .rt2 thead th em{display:block;font-style:normal;color:var(--out);font-weight:700} .rt2 thead th:nth-child(2){color:var(--in)}
+.rt2 .st{width:58px;min-width:0;max-width:none;font-size:11.5px}
+.rt2 tbody .st b{font-weight:700;display:block;overflow:hidden;text-overflow:ellipsis}
+.rt2 td.st small{font-size:9.5px}
+.rt2 td.pr2 span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .rt2 td.pr2 span.z{color:var(--line)}
+.rt2 td.b{font-size:11.5px}
+.jl{padding:0 10px 10px;display:flex;flex-direction:column}
+.jr{display:grid;grid-template-columns:44px 1fr auto auto;gap:8px;align-items:center;min-height:38px;padding:4px 6px;border:0;border-bottom:1px solid var(--line);background:none;color:inherit;font:inherit;text-align:left;width:100%}
+.jr:active{background:var(--bg2)}
+.jr .jd{font-size:12px;font-weight:750;line-height:1.1} .jr .jd small{display:block;font-size:9.5px;color:var(--muted);font-weight:600}
+.jr .jn{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0} .jr .jn i{font-style:normal;font-size:10px;color:var(--muted)}
+.jr .jp{display:flex;flex-direction:column;align-items:flex-end;font-size:10.5px;line-height:1.15} .jr .jp b{font-weight:700}
+.jr .ja{display:flex;flex-direction:column;align-items:flex-end;font-size:13.5px;font-weight:800;line-height:1.1;min-width:70px} .jr .ja small{font-size:9.5px;color:var(--muted);font-weight:600}
+.pp-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pp-box{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:inherit;font:inherit;text-align:left;min-width:0}
+.pp-box b{font-size:14.5px} .pp-box small{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pp-box.on{border:2px solid var(--brand);background:var(--brand-soft)}
+.cal{padding:10px}
+.cal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px} .cal-h b{font-size:16px} .cal-h .icon-btn{width:38px;height:38px}
+.cal-g{display:grid;grid-template-columns:repeat(7,1fr);row-gap:4px}
+.cal-g i{font-style:normal;text-align:center;font-size:11.5px;color:var(--muted);font-weight:700;padding:4px 0}
+.cal-g button{height:40px;border:0;background:none;color:inherit;font:inherit;font-weight:650;font-size:14.5px;border-radius:0}
+.cal-g button.td{text-decoration:underline;text-underline-offset:3px;font-weight:800}
+.cal-g button.mid{background:var(--brand-soft)}
+.cal-g button.sa,.cal-g button.sb{background:var(--brand);color:var(--brand-ink);font-weight:800}
+.cal-g button.sa.rs{border-radius:12px 0 0 12px} .cal-g button.sb{border-radius:0 12px 12px 0} .cal-g button.sa.one{border-radius:12px}
+.pp-foot{display:flex;align-items:center;gap:10px;width:100%} .pp-foot span{flex:1;min-width:0;display:flex;flex-direction:column} .pp-foot small{font-size:11.5px;color:var(--muted)} .pp-foot b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .pp-foot .btn{flex:none}

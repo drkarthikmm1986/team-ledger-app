@@ -24,6 +24,7 @@ export function createGroupBook(groups) {
       const src = byId.get(e.id) || byId.get(srcId);
       e.locked = !editableSource(byId.get(e.id));
       if (e.id.startsWith('settle-')) { e.kind = 'settle'; e.locked = false; }
+      if (src && src.importInfo && src.importInfo.batchId) e.imp = { batchId: src.importInfo.batchId, fileName: src.importInfo.fileName || '' };
       if (src && Array.isArray(src.attachments)) {
         e.files = e.id.endsWith('-out') ? [] : src.attachments.map(a => { files[a.id] = { name: a.name || 'file', mime: a.mime, data: a.data }; return { id: a.id, name: a.name || 'file', mime: a.mime }; });
       }

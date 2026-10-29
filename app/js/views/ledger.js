@@ -211,54 +211,98 @@ export function viewReport(ctx, book) {
     </div>
     <div class="card chart">${chart(book, from, to, ids)}</div>
     <div class="row2 mt12"><button class="btn" data-act="pdf">${ic('pdf', 20)}PDF</button><button class="btn ghost" data-act="csv">${ic('excel', 20)}Excel</button></div>
-    <div class="section-h"><h2>${single ? T('நாள் வாரியாக', 'Day by day') + ' · ' + esc(accs[0].a.name) : T('கணக்கு வாரியாக', 'By account')}</h2><span class="muted">${single ? '' : accs.length}</span></div>
-    ${accs.length ? repTable(book, accs, tot, mets, single) : `<div class="card pad16 muted">${T('கணக்கு இல்லை', 'No accounts')}</div>`}
-    <p class="note">${T('இடது-வலது நகர்த்திப் பார்க்கலாம். முதல் நெடுவரிசை நிலையாக இருக்கும்.', 'Swipe left / right to see every column. The first column stays in place.')}</p>
-    <details class="rep-more card" data-keep="tl4-rep-j" ${keepOpen('tl4-rep-j')}><summary><span class="tx"><b>${T('ஜர்னல் · எல்லா பதிவுகளும்', 'Journal · every entry')}</b><small>${TP('{n} பதிவுகள்', '{n} entries', { n: jr.length })}</small></span>${ic('chev', 20)}</summary>
-      <div class="list">${jr.slice(0, 300).map(({ e, bal }) => entryRow(book, e, bal, !single)).join('') || `<p class="muted pad16">${T('இந்த காலத்தில் பதிவு இல்லை', 'No entries in this period')}</p>`}${jr.length > 300 ? `<p class="note center">${TP('முதல் 300 மட்டும் காட்டப்படுகிறது. முழுதும் PDF / Excel-ல்.', 'Showing the latest 300. Everything is in the PDF / Excel.', {})}</p>` : ''}</div></details>
+    <details class="rep-more card" data-keep="tl4-rep-a" ${ls.get('tl4-rep-a', '1') === '1' ? 'open' : ''}><summary><span class="tx"><b>${single ? T('நாள் வாரியாக', 'Day by day') + ' · ' + esc(accs[0].a.name) : T('கணக்கு வாரியாக', 'By account')}</b><small>${single ? T('ஒவ்வொரு நாளும் ஒரு வரி', 'One line per day') : T('முதலில் சுருக்கம், பிறகு ஒவ்வொரு கணக்கும் · இடப்பக்கம் தள்ளவும்', 'Summary first, then each account · swipe left')}</small></span>${ic('chev', 18)}</summary>
+      ${accs.length ? repPanels(book, accs, tot, from, to) : `<p class="muted pad16">${T('கணக்கு இல்லை', 'No accounts')}</p>`}</details>
+    <details class="rep-more card" data-keep="tl4-rep-j" ${keepOpen('tl4-rep-j')}><summary><span class="tx"><b>${T('ஜர்னல் · எல்லா பதிவுகளும்', 'Journal · every entry')}</b><small>${TP('{n} பதிவுகள்', '{n} entries', { n: jr.length })}</small></span>${ic('chev', 18)}</summary>
+      <div class="jl">${jr.slice(0, 500).map(({ e, bal }) => jRow(book, e, bal, !single)).join('') || `<p class="muted pad16">${T('இந்த காலத்தில் பதிவு இல்லை', 'No entries in this period')}</p>`}${jr.length > 500 ? `<p class="note center">${T('முதல் 500 மட்டும் காட்டப்படுகிறது. முழுதும் PDF / Excel-ல்.', 'Showing the latest 500. Everything is in the PDF / Excel.')}</p>` : ''}</div></details>
     ${sr.length ? `<details class="rep-more card" data-keep="tl4-rep-s" ${keepOpen('tl4-rep-s')}><summary><span class="tx"><b>${T('செட்டில்மெண்ட் · லாபத்திலிருந்து எடுத்தது', 'Settlements · taken from profit')}</b><small>${TP('{n} பதிவுகள்', '{n} entries', { n: sr.length })} · ${money(tot.settled)}</small></span>${ic('chev', 20)}</summary>
-      <div class="list">${sr.map(({ e, bal }) => entryRow(book, e, bal, !single)).join('')}</div></details>` : ''}
+      <div class="jl">${sr.map(({ e, bal }) => jRow(book, e, bal, !single)).join('')}</div></details>` : ''}
     <button class="btn block mt12" data-act="pdf">${ic('pdf', 20)}${T('இதை PDF ஆக எடு', 'Download this as PDF')}</button>`;
 }
-/* One line per account (or per day for one account); every figure in its own column; first column frozen. */
-function repTable(book, accs, tot, mets, single) {
-  const cols = mets.filter(([k]) => !(single && k === 'open'));
-  const td = (k, v, cls) => `<td class="${v ? cls : 'z'} c-${k}">${v ? money(v) : '·'}</td>`;
-  const head = `<thead><tr><th class="st">${single ? T('தேதி', 'Date') : T('கணக்கு', 'Account')}</th>${cols.map(([k, l]) => `<th class="c-${k}">${l}</th>`).join('')}</tr></thead>`;
-  let body = '';
-  if (single) {
-    const { a, t } = accs[0], days = new Map();
-    for (const { e, bal } of t.rows) {
-      let d = days.get(e.date); if (!d) { d = { n: 0, inn: 0, out: 0, gIn: 0, gOut: 0, cIn: 0, cOut: 0, profit: 0, settled: 0, bal: 0 }; days.set(e.date, d); }
-      d.n++; d.bal = bal;
-      if (isSettle(e)) { d.settled += e.amt; continue; }
-      if (counts(e)) { if (e.dir > 0) d.inn += e.amt; else d.out += e.amt; }
-      const g = (e.profit || 0) + (e.comm || 0); if (e.dir > 0) { d.gIn += g; d.cIn += e.comm || 0; } else { d.gOut += g; d.cOut += e.comm || 0; }
-      d.profit += e.profit || 0;
-    }
-    let hand = 0;
-    body = `<tr class="rt-open"><td class="st">${T('தொடக்கம்', 'Opening')}</td>${cols.map(([k]) => k === 'bal' ? `<td>${money(t.open)}</td>` : '<td></td>').join('')}</tr>` +
-      [...days].map(([date, d]) => { hand += d.profit - d.settled; d.inHand = hand;
-        return `<tr><td class="st">${dmy(date)}<small>${TP('{n} பதிவு', '{n} entries', { n: d.n })}</small></td>${cols.map(([k, , c]) => k === 'bal' ? `<td class="b ${d.bal < 0 ? 'out' : ''}">${money(d.bal)}</td>` : td(k, d[k], c)).join('')}</tr>`; }).join('');
-  } else {
-    body = accs.map(({ a, t }) => `<tr class="click" data-go="${accRoute(book, a.id)}"><td class="st"><b>${esc(a.name)}</b></td>${cols.map(([k, , c]) => k === 'bal' ? `<td class="b ${t.bal < 0 ? 'out' : ''}">${money(t.bal)}</td>` : td(k, t[k], k === 'inHand' && t[k] < 0 ? 'out' : c)).join('')}</tr>`).join('');
+/* Compact money for the report grid: no ₹, paise only when they matter. */
+const cmF = v => { if (!v) return ''; const a = Math.abs(v), neg = v < 0 ? '−' : ''; return neg + (a % 100 && a < 1e7 ? (a / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : Math.round(a / 100).toLocaleString('en-IN')); };
+/* Short form for the grid: 1,23,456 → 1.23L, 2,34,56,789 → 2.35Cr, paise only under ₹1,000. */
+const cm = v => { if (!v) return ''; const r = Math.abs(v) / 100, neg = v < 0 ? '−' : '', f = (x, d) => x.toFixed(d).replace(/\.?0+$/, '');
+  return neg + (r >= 1e7 ? f(r / 1e7, 2) + 'Cr' : r >= 1e5 ? f(r / 1e5, 2) + 'L' : r >= 1000 ? Math.round(r).toLocaleString('en-IN') : f(r, 2)); };
+/* Stacked cell: top = in side, bottom = out side (old app style, fits the phone width). */
+const pair = (a, b, ca, cb) => `<td class="pr2"><span class="${a ? ca : 'z'}">${cm(a) || '·'}</span><span class="${b ? cb : 'z'}">${cm(b) || '·'}</span></td>`;
+const one = (v, c) => `<td class="${v ? c : 'z'}">${cm(v) || '·'}</td>`;
+function dayRows(t) {
+  const days = new Map();
+  for (const { e, bal } of t.rows) {
+    let d = days.get(e.date); if (!d) { d = { n: 0, inn: 0, out: 0, gIn: 0, gOut: 0, cIn: 0, cOut: 0, profit: 0, settled: 0, paid: 0, bal: 0 }; days.set(e.date, d); }
+    d.n++; d.bal = bal;
+    if (isSettle(e)) { d.settled += e.amt; continue; }
+    if (counts(e)) { if (e.dir > 0) d.inn += e.amt; else d.out += e.amt; }
+    const g = (e.profit || 0) + (e.comm || 0); if (e.dir > 0) { d.gIn += g; d.cIn += e.comm || 0; } else { d.gOut += g; d.cOut += e.comm || 0; }
+    d.profit += e.profit || 0; d.paid += e.commPaid || 0;
   }
-  const foot = `<tfoot><tr><td class="st">${T('மொத்தம்', 'Total')}</td>${cols.map(([k, , c]) => k === 'bal' ? `<td class="b">${money(tot.bal)}</td>` : `<td class="${c}">${single && k === 'inHand' ? money(tot.inHand) : money(tot[k])}</td>`).join('')}</tr></tfoot>`;
-  return `<div class="rt-wrap"><table class="rt num">${head}<tbody>${body}</tbody>${foot}</table></div>`;
+  return days;
 }
-/* Period chooser for the report. */
+/* By account: first panel = one line per account, then one panel per account with one line per day.
+   Every panel fits the screen width; swipe left / right for the next account. Date / name column stays. */
+function repPanels(book, accs, tot, from, to) {
+  const anyP = accs.some(x => x.t.gross), anyC = accs.some(x => x.t.comm), anyS = accs.some(x => x.t.settled), anyPaid = accs.some(x => x.t.paid);
+  const head = first => `<thead><tr><th class="st">${first}</th><th>${T('வரவு', 'In')}<em>${T('செலவு', 'Out')}</em></th>${anyP ? `<th>${T('வ. லாபம்', 'In profit')}<em>${T('செ. லாபம்', 'Out profit')}</em></th>` : ''}${anyC ? `<th>${T('வ. கமிஷன்', 'In comm.')}<em>${T('செ. கமிஷன்', 'Out comm.')}</em></th>` : ''}${anyPaid ? `<th>${T('கொடுத்தது', 'Paid')}<em>${T('மீதம்', 'Due')}</em></th>` : ''}${anyP || anyS ? `<th>${T('நிகர லாபம்', 'Net profit')}<em>${anyS ? T('எடுத்தது', 'Taken') : ''}</em></th>` : ''}<th>${T('இருப்பு', 'Balance')}</th></tr></thead>`;
+  const cells = x => pair(x.inn, x.out, 'in', 'out') + (anyP ? pair(x.gIn, x.gOut, 'in', 'in') : '') + (anyC ? pair(x.cIn, x.cOut, 'out', 'out') : '') + (anyPaid ? pair(x.paid, x.cIn + x.cOut - x.paid, '', 'out') : '') + (anyP || anyS ? pair(x.profit, x.settled, 'in', 'amber') : '');
+  const panel = (title, sub, body, foot, k) => `<section class="rp-panel" data-k="${k}"><div class="rp-h"><b>${esc(title)}</b><small>${esc(sub)}</small></div><div class="rt-wrap"><table class="rt rt2 num">${body}${foot}</table></div></section>`;
+  const panels = [];
+  const multi = accs.length > 1;
+  if (multi) {
+    const body = head(T('கணக்கு', 'Account')) + `<tbody>${accs.map(({ a, t }) => `<tr class="click" data-go="${accRoute(book, a.id)}"><td class="st"><b>${esc(a.name)}</b></td>${cells(t)}<td class="b ${t.bal < 0 ? 'out' : ''}">${cm(t.bal) || '0'}</td></tr>`).join('')}</tbody>`;
+    const foot = `<tfoot><tr><td class="st">${T('மொத்தம்', 'Total')}</td>${cells(tot)}<td class="b">${cm(tot.bal) || '0'}</td></tr></tfoot>`;
+    panels.push(panel(T('எல்லா கணக்கும் · சுருக்கம்', 'All accounts · summary'), TP('{n} கணக்குகள்', '{n} accounts', { n: accs.length }), body, foot, 'all'));
+  }
+  for (const { a, t } of accs) {
+    const days = dayRows(t);
+    const body = head(T('தேதி', 'Date')) + `<tbody><tr class="rt-open"><td class="st">${T('தொடக்கம்', 'Opening')}</td>${'<td></td>'.repeat(1 + (anyP ? 1 : 0) + (anyC ? 1 : 0) + (anyPaid ? 1 : 0) + (anyP || anyS ? 1 : 0))}<td class="b">${cm(t.open) || '0'}</td></tr>` +
+      [...days].map(([date, d]) => `<tr><td class="st">${date.slice(8, 10)}-${date.slice(5, 7)}<small>${date.slice(0, 4)}${d.n > 1 ? ' · ' + d.n : ''}</small></td>${cells(d)}<td class="b ${d.bal < 0 ? 'out' : ''}">${cm(d.bal) || '0'}</td></tr>`).join('') + `</tbody>`;
+    const foot = `<tfoot><tr><td class="st">${T('மொத்தம்', 'Total')}</td>${cells(t)}<td class="b">${cm(t.bal) || '0'}</td></tr></tfoot>`;
+    panels.push(panel(a.name, `${T('இருப்பு', 'Balance')} ${money(t.bal)}${t.gross || t.settled ? ' · ' + T('கையிருப்பு லாபம்', 'Profit in hand') + ' ' + money(t.inHand) : ''}`, body, foot, a.id));
+  }
+  const tabs = panels.length > 1 ? `<div class="rp-tabs">${(multi ? [['all', T('சுருக்கம்', 'Summary')]] : []).concat(accs.map(({ a }) => [a.id, a.name])).map(([k, l], i) => `<button class="${i ? '' : 'on'}" data-rp-go="${esc(k)}">${esc(l)}</button>`).join('')}</div>` : '';
+  return tabs + `<div class="rp-track">${panels.join('')}</div>`;
+}
+/* One compact journal line (about 1 cm): date · name / note · amount · profit. */
+function jRow(book, e, bal, showAcc) {
+  const acc = book.account(e.acc), st = isSettle(e), g = (e.profit || 0) + (e.comm || 0);
+  const name = [showAcc && acc ? acc.name : '', e.note || e.party || (st ? T('லாபத்திலிருந்து எடுத்தது', 'Taken from profit') : e.dir > 0 ? T('வரவு', 'In') : T('செலவு', 'Out'))].filter(Boolean).join(' · ');
+  return `<button class="jr" data-act="edit-entry" data-id="${esc(e.id)}"><span class="jd">${e.date.slice(8, 10)}-${e.date.slice(5, 7)}<small>${e.time && e.time !== '00:00' ? niceTime(e.time) : e.date.slice(0, 4)}</small></span>
+    <span class="jn">${esc(name)}${!counts(e) && !st ? ` <i>${T('இருப்பில் இல்லை', 'not in balance')}</i>` : ''}</span>
+    <span class="jp">${g ? `<b class="in">${cmF(g)}</b>` : ''}${e.comm ? `<b class="out">${cmF(e.comm)}</b>` : ''}</span>
+    <span class="ja ${st ? 'amber' : e.dir > 0 ? 'in' : 'out'}">${st ? '−' : e.dir > 0 ? '+' : '−'}${cmF(e.amt)}<small>${cmF(bal) || '0'}</small></span></button>`;
+}
+/* Period chooser: quick ranges as small boxes, and a hotel-booking style calendar for any range. */
 function periodPicker(ctx) {
   const cur = ctx.ui.rPeriod, c = ctx.ui.rCustom || ['', ''];
-  openSheet(T('எந்த தேதிகள்?', 'Which dates?'), `<div class="menu">${PERIODS().map(([k, l]) => { const r = k === 'custom' ? null : periodRange(k, c);
-      return `<button class="row" data-e="per" data-k="${k}"><span class="tx"><b>${l}</b>${r ? `<small>${r[0] || r[1] ? esc(`${niceDate(r[0]) || '…'} – ${niceDate(r[1]) || '…'}`) : T('எல்லா நாட்களும்', 'All time')}</small>` : ''}</span>${cur === k ? `<span class="end in">${ic('check', 22, 3)}</span>` : ''}</button>`; }).join('')}</div>
-    <div class="row2 mt12 pp-dates" ${cur === 'custom' ? '' : 'hidden'}><div class="field"><label for="pp-from">${T('முதல்', 'From')}</label><input class="input" type="date" id="pp-from" value="${esc(c[0])}"></div><div class="field"><label for="pp-to">${T('வரை', 'To')}</label><input class="input" type="date" id="pp-to" value="${esc(c[1])}"></div></div>`,
-    `<button class="btn block" id="pp-go" ${cur === 'custom' ? '' : 'hidden'}>${ic('check', 20, 3)}${T('காட்டு', 'Show')}</button>`);
-  document.querySelectorAll('#sheet-root [data-e=per]').forEach(b => b.onclick = () => {
-    if (b.dataset.k === 'custom') { $('#sheet-root .pp-dates').hidden = false; $('#pp-go').hidden = false; $('#pp-from').focus(); return; }
-    ctx.ui.rPeriod = b.dataset.k; closeSheet(); ctx.render();
-  });
-  $('#pp-go').onclick = () => { ctx.ui.rPeriod = 'custom'; ctx.ui.rCustom = [$('#pp-from').value, $('#pp-to').value]; closeSheet(); ctx.render(); };
+  const quick = PERIODS().filter(([k]) => k !== 'custom');
+  const st = { a: c[0] || '', b: c[1] || '', m: (c[0] || today()).slice(0, 7) };
+  openSheet(T('எந்த தேதிகள்?', 'Which dates?'), `<div class="pp-grid">${quick.map(([k, l]) => { const r = periodRange(k, c);
+      return `<button class="pp-box ${cur === k ? 'on' : ''}" data-e="per" data-k="${k}"><b>${l}</b><small>${r[0] ? esc(r[0] === r[1] ? niceDate(r[0]) : `${niceDate(r[0])} – ${niceDate(r[1])}`) : T('எல்லா நாட்களும்', 'All time')}</small></button>`; }).join('')}</div>
+    <div class="section-h"><h2>${T('தேதி தேர்வு', 'Pick dates')}</h2></div>
+    <div class="cal card" id="pp-cal"></div>`,
+    `<div class="pp-foot"><span id="pp-sum"></span><button class="btn" id="pp-go">${ic('check', 20, 3)}${T('காட்டு', 'Show')}</button></div>`, { tall: true });
+  const draw = () => {
+    const [y, m] = st.m.split('-').map(Number), first = new Date(y, m - 1, 1), days = new Date(y, m, 0).getDate(), lead = (first.getDay() + 6) % 7, td = today();
+    let wk = ['தி', 'செ', 'பு', 'வி', 'வெ', 'ச', 'ஞா']; if (locale() !== 'ta-IN') { try { const f = new Intl.DateTimeFormat(locale(), { weekday: 'narrow' }); wk = [1, 2, 3, 4, 5, 6, 7].map(d => f.format(new Date(2024, 0, d))); } catch (e) { wk = ['M', 'T', 'W', 'T', 'F', 'S', 'S']; } }
+    let cells = '';
+    for (let i = 0; i < lead; i++) cells += '<span></span>';
+    for (let d = 1; d <= days; d++) {
+      const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`, b = st.b || st.a;
+      const cls = [iso === st.a ? (st.b && st.b !== st.a ? 'sa rs' : 'sa one') : '', iso === b && st.b && st.b !== st.a ? 'sb' : '', st.a && st.b && iso > st.a && iso < st.b ? 'mid' : '', iso === td ? 'td' : ''].join(' ');
+      cells += `<button class="${cls}" data-d="${iso}">${d}</button>`;
+    }
+    $('#pp-cal').innerHTML = `<div class="cal-h"><button class="icon-btn" data-m="-1" aria-label="prev">${ic('back', 18)}</button><b>${monName(m - 1)} ${y}</b><button class="icon-btn" data-m="1" aria-label="next">${ic('chev', 18)}</button></div><div class="cal-g">${wk.map(w => `<i>${w}</i>`).join('')}${cells}</div>`;
+    $('#pp-sum').innerHTML = st.a ? `<small>${T('முதல் – வரை', 'From – to')}</small><b>${esc(niceDate(st.a))} – ${esc(st.b ? niceDate(st.b) : '?')}</b>` : `<small>${T('முதல் நாளைத் தொடவும், பிறகு கடைசி நாளை', 'Tap the first day, then the last day')}</small>`;
+    $('#pp-go').disabled = !st.a;
+    $('#pp-cal').querySelectorAll('[data-d]').forEach(b => b.onclick = () => { const d = b.dataset.d; if (!st.a || st.b) { st.a = d; st.b = ''; } else if (d < st.a) { st.a = d; } else st.b = d; draw(); });
+    $('#pp-cal').querySelectorAll('[data-m]').forEach(b => b.onclick = () => { const dt = new Date(y, m - 1 + Number(b.dataset.m), 1); st.m = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`; draw(); });
+  };
+  draw();
+  document.querySelectorAll('#sheet-root [data-e=per]').forEach(b => b.onclick = () => { ctx.ui.rPeriod = b.dataset.k; closeSheet(); ctx.render(); });
+  $('#pp-go').onclick = () => { ctx.ui.rPeriod = 'custom'; ctx.ui.rCustom = [st.a, st.b || st.a]; closeSheet(); ctx.render(); };
 }
+if (typeof document !== 'undefined') document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-rp-go]'); if (!b) return; const tr = b.closest('details').querySelector('.rp-track'), p = tr.querySelector(`[data-k="${CSS.escape(b.dataset.rpGo)}"]`); if (p) tr.scrollTo({ left: p.offsetLeft - tr.offsetLeft, behavior: 'smooth' }); b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); });
 if (typeof document !== 'undefined') document.addEventListener('toggle', e => { const k = e.target && e.target.dataset && e.target.dataset.keep; if (k) ls.set(k, e.target.open ? '1' : ''); }, true);
 /* Account chooser for the report: full details per account, tick the ones you want. */
 function accPicker(ctx, book) {
@@ -521,10 +565,18 @@ export function accountMenu(ctx, book, a) {
   openSheet(a.name, `<div class="menu">
     ${book.canEdit && !a.locked ? `<button class="row" data-act="acc-edit" data-id="${esc(a.id)}"><span class="ic">${ic('edit')}</span><span class="tx"><b>${T('கணக்கைத் திருத்து', 'Edit account')}</b><small>${T('பெயர், தொடக்க இருப்பு, லாபம் %', 'Name, opening balance, profit %')}</small></span></button>` : ''}
     ${book.canEdit && !a.locked ? `<button class="row" data-act="acc-import" data-id="${esc(a.id)}"><span class="ic green">${ic('down')}</span><span class="tx"><b>${T('கோப்பிலிருந்து பதிவுகளைச் சேர்', 'Import entries from a file')}</b><small>PDF · Excel · CSV</small></span></button>` : ''}
+    ${(() => { if (!book.canEdit || a.locked) return ''; const last = lastImport(book, a.id); return last ? `<button class="row" data-act="acc-unimport" data-id="${esc(a.id)}"><span class="ic red">${ic('trash')}</span><span class="tx"><b>${T('கடைசியாக இறக்கியதை நீக்கு', 'Remove the last import')}</b><small>${esc(last.name)} · ${TP('{n} பதிவுகள்', '{n} entries', { n: last.ids.length })}</small></span></button>` : ''; })()}
     <button class="row" data-act="acc-pdf" data-id="${esc(a.id)}"><span class="ic">${ic('pdf')}</span><span class="tx"><b>${T('PDF அறிக்கை', 'PDF statement')}</b></span></button>
     <button class="row" data-act="acc-share" data-id="${esc(a.id)}"><span class="ic green">${ic('share')}</span><span class="tx"><b>${T('இருப்பை அனுப்பு (WhatsApp)', 'Send balance (WhatsApp)')}</b></span></button>
     ${a.phone && !native.any ? `<a class="row link-row" href="tel:${esc(a.phone)}"><span class="ic">${ic('phone')}</span><span class="tx"><b>${T('அழை', 'Call')} ${esc(a.phone)}</b></span></a>` : ''}
   </div>`);
+}
+/** Latest import batch of an account → { name, ids } (ids are the stored entry ids). */
+function lastImport(book, accId) {
+  const by = new Map();
+  for (const e of book.entries) if (e.acc === accId && e.imp && e.imp.batchId) { let b = by.get(e.imp.batchId); if (!b) { b = { id: e.imp.batchId, name: e.imp.fileName || '', at: 0, ids: new Set() }; by.set(b.id, b); } b.at = Math.max(b.at, e.created || 0); b.ids.add(e.id.replace(/-(in|out)$/, '')); }
+  const last = [...by.values()].sort((x, y) => y.at - x.at)[0];
+  return last ? { name: last.name, ids: [...last.ids] } : null;
 }
 export function accountShareText(book, a) {
   const t = accountTotals(book, a, '', '');
@@ -641,6 +693,11 @@ export const ledgerActions = {
   'acc-edit': (ctx, b) => accountSheet(ctx, ctx.book(), ctx.book().account(b.dataset.id)),
   'acc-pdf': (ctx, b) => { closeSheet(true); const [f, t] = periodRange(ctx.ui.period, ctx.ui.custom); const book = ctx.book(); pdfOptions(ctx, book, [b.dataset.id], f, t, book.account(b.dataset.id).name); },
   'acc-import': (ctx, b) => { closeSheet(true); const book = ctx.book(); importSheet(ctx, book, book.account(b.dataset.id)); },
+  'acc-unimport': async (ctx, b) => {
+    closeSheet(true); const book = ctx.book(), last = lastImport(book, b.dataset.id); if (!last) return;
+    if (!(await confirmBox(T('கடைசியாக இறக்கியதை நீக்கவா?', 'Remove the last import?'), TP('{f} கோப்பிலிருந்து வந்த {n} பதிவுகள் நீக்கப்படும்.', '{n} entries from {f} will be removed.', { n: last.ids.length, f: last.name || '—' }), T('நீக்கு', 'Remove'), true))) return;
+    await book.deleteEntries(last.ids); ctx.render(); toast(T('நீக்கப்பட்டது', 'Removed'));
+  },
   'home-io': (ctx, b) => { ls.set('tl4-home-io', b.dataset.v); ctx.render(); },
   'rper-pick': ctx => periodPicker(ctx),
   'acc-share': (ctx, b) => { closeSheet(true); const book = ctx.book(); shareText(accountShareText(book, book.account(b.dataset.id))); },

@@ -6,7 +6,7 @@ export const sortEntries = list => list.slice().sort((a, b) => a.date.localeComp
 
 export function accountTotals(book, acc, from, to) {
   const list = sortEntries(book.entries.filter(e => e.acc === acc.id));
-  let bal = acc.opening || 0, open = bal, inn = 0, out = 0, profit = 0, comm = 0, paid = 0, settled = 0;
+  let bal = acc.opening || 0, open = bal, inn = 0, out = 0, profit = 0, comm = 0, paid = 0, settled = 0, gIn = 0, gOut = 0, cIn = 0, cOut = 0;
   const rows = [];
   for (const e of list) {
     if (to && e.date > to) continue;
@@ -15,16 +15,18 @@ export function accountTotals(book, acc, from, to) {
     if (from && e.date < from) { open = bal; continue; }
     if (counts(e)) { if (e.dir > 0) inn += e.amt; else out += e.amt; }
     profit += e.profit || 0; comm += e.comm || 0; paid += e.commPaid || 0;
+    if (e.dir > 0) { gIn += (e.profit || 0) + (e.comm || 0); cIn += e.comm || 0; } else { gOut += (e.profit || 0) + (e.comm || 0); cOut += e.comm || 0; }
     rows.push({ e, bal });
   }
   if (!from) open = acc.opening || 0;
-  return { open, inn, out, bal, profit, comm, paid, settled, inHand: profit - settled, gross: profit + comm, rows, last: list.length ? list[list.length - 1].date : '' };
+  return { open, inn, out, bal, profit, comm, paid, settled, inHand: profit - settled, gross: profit + comm, gIn, gOut, cIn, cOut, rows, last: list.length ? list[list.length - 1].date : '' };
 }
 export function allTotals(book, from, to, accIds) {
-  const t = { inn: 0, out: 0, bal: 0, profit: 0, comm: 0, paid: 0, settled: 0 };
+  const t = { open: 0, inn: 0, out: 0, bal: 0, profit: 0, comm: 0, paid: 0, settled: 0, gIn: 0, gOut: 0, cIn: 0, cOut: 0 };
   for (const a of book.accounts) {
     if (accIds && !accIds.includes(a.id)) continue;
     const x = accountTotals(book, a, from, to);
+    for (const k of ['open', 'gIn', 'gOut', 'cIn', 'cOut']) t[k] += x[k];
     t.inn += x.inn; t.out += x.out; t.bal += x.bal; t.profit += x.profit; t.comm += x.comm; t.paid += x.paid; t.settled += x.settled;
   }
   t.gross = t.profit + t.comm; t.inHand = t.profit - t.settled;

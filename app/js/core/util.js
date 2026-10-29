@@ -1,5 +1,5 @@
 /* Shared helpers: DOM, storage, language, money, dates, icons, native bridges. */
-export const VERSION = '4.1.6';
+export const VERSION = '4.1.7';
 export const CFG = (typeof window !== 'undefined' && window.TL_CONFIG) || {};
 export const $ = (s, r) => (r || document).querySelector(s);
 export const $$ = (s, r) => [...(r || document).querySelectorAll(s)];

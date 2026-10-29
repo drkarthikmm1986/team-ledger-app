@@ -541,5 +541,16 @@ export default {
 "Delete and start again": "احذف وابدأ من جديد",
 "Not yet. Did you sign in on that phone with the new app?": "ليس بعد. هل سجّلت الدخول على ذلك الهاتف بالتطبيق الجديد؟",
 "Delete the group?": "حذف المجموعة؟",
-"“{g}” and its records are removed for everyone, permanently.": "ستُحذف «{g}» وسجلاتها للجميع نهائيًا."
+"“{g}” and its records are removed for everyone, permanently.": "ستُحذف «{g}» وسجلاتها للجميع نهائيًا.",
+"Total (all of the above)": "الإجمالي (كل ما سبق)",
+"Download this as PDF": "تنزيل كملف PDF",
+"Which accounts?": "أي الحسابات؟",
+"None": "لا شيء",
+"Search accounts": "ابحث في الحسابات",
+"Show all accounts": "عرض كل الحسابات",
+"Show {n} accounts": "عرض {n} حسابات",
+"All accounts ({n})": "كل الحسابات ({n})",
+"{n} accounts": "{n} حسابات",
+"Tap to choose which accounts to show": "اضغط لاختيار الحسابات المعروضة",
+"Total · {n} accounts": "الإجمالي · {n} حسابات"
 };

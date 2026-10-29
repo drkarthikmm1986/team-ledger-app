@@ -541,5 +541,16 @@ export default {
 "Delete and start again": "हटाकर फिर से शुरू करें",
 "Not yet. Did you sign in on that phone with the new app?": "अभी नहीं आया। क्या आपने उस फ़ोन पर नए ऐप में साइन इन किया?",
 "Delete the group?": "ग्रुप हटाएँ?",
-"“{g}” and its records are removed for everyone, permanently.": "“{g}” और उसके रिकॉर्ड सबके लिए हमेशा के लिए हट जाएँगे।"
+"“{g}” and its records are removed for everyone, permanently.": "“{g}” और उसके रिकॉर्ड सबके लिए हमेशा के लिए हट जाएँगे।",
+"Total (all of the above)": "कुल (ऊपर के सभी)",
+"Download this as PDF": "इसे PDF में डाउनलोड करें",
+"Which accounts?": "कौन से खाते?",
+"None": "कोई नहीं",
+"Search accounts": "खाते खोजें",
+"Show all accounts": "सभी खाते दिखाएँ",
+"Show {n} accounts": "{n} खाते दिखाएँ",
+"All accounts ({n})": "सभी खाते ({n})",
+"{n} accounts": "{n} खाते",
+"Tap to choose which accounts to show": "कौन से खाते दिखाने हैं, चुनने के लिए टैप करें",
+"Total · {n} accounts": "कुल · {n} खाते"
 };

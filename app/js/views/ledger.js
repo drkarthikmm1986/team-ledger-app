@@ -157,32 +157,76 @@ export function viewAccount(ctx, book, a) {
 }
 
 /* ---------------- Report ---------------- */
+/* Report account selection (per book): null = every account. */
+export function repIds(ctx, book) {
+  const all = (ctx.ui.rSel || {})[book.id] || [];
+  const sel = all.filter(id => book.account(id));
+  return sel.length && sel.length < book.accounts.length ? sel : null;
+}
+/* Every money figure the old app showed, in one place: used by the report screen and the PDF. */
+export const METRICS = () => [
+  ['open', T('தொடக்க இருப்பு', 'Opening'), ''], ['inn', T('வரவு', 'In'), 'in'], ['out', T('செலவு', 'Out'), 'out'],
+  ['gIn', T('வரவு லாபம்', 'In profit'), 'in'], ['gOut', T('செலவு லாபம்', 'Out profit'), 'in'],
+  ['cIn', T('வரவு கமிஷன்', 'In commission'), 'out'], ['cOut', T('செலவு கமிஷன்', 'Out commission'), 'out'],
+  ['profit', T('நிகர லாபம்', 'Net profit'), 'in'], ['settled', T('லாபத்திலிருந்து எடுத்தது', 'Taken from profit'), 'amber'],
+  ['inHand', T('கையிருப்பு லாபம்', 'Profit in hand'), 'in'], ['bal', T('இருப்பு', 'Balance'), '']
+];
+const metricShown = per => {
+  const any = k => per.some(t => t[k]);
+  const p = any('gIn') || any('gOut') || any('cIn') || any('cOut');
+  return { open: true, inn: true, out: true, gIn: any('gIn'), gOut: any('gOut'), cIn: any('cIn'), cOut: any('cOut'), profit: p, settled: any('settled'), inHand: p || any('settled'), bal: true };
+};
+const cell = (label, v, cls) => `<div><small>${label}</small><b class="num ${v ? cls : 'muted'}">${v ? money(v) : '—'}</b></div>`;
 export function viewReport(ctx, book) {
   const [from, to] = periodRange(ctx.ui.rPeriod, ctx.ui.rCustom);
-  const ids = ctx.ui.rAcc && book.account(ctx.ui.rAcc) ? [ctx.ui.rAcc] : null;
+  const ids = repIds(ctx, book);
   const tot = allTotals(book, from, to, ids);
   const accs = book.accounts.filter(a => !ids || ids.includes(a.id)).map(a => ({ a, t: accountTotals(book, a, from, to) }));
   const rangeTxt = from || to ? `${niceDate(from) || '…'} – ${niceDate(to) || '…'}` : T('எல்லா நாட்களும்', 'All time');
-  const group = book.kind === 'group', anyP = accs.some(x => x.t.gross || x.t.settled);
+  const group = book.kind === 'group';
+  const show = metricShown(accs.map(x => x.t)), mets = METRICS().filter(([k]) => show[k]);
+  const pickLabel = !ids ? TP('எல்லா கணக்கும் ({n})', 'All accounts ({n})', { n: book.accounts.length }) : ids.length === 1 ? book.account(ids[0]).name : TP('{n} கணக்குகள்', '{n} accounts', { n: ids.length });
+  const pickSub = ids && ids.length > 1 ? ids.map(id => book.account(id).name).join(', ') : T('தட்டி எந்தக் கணக்கு வேண்டும் எனத் தேர்வு செய்யவும்', 'Tap to choose which accounts to show');
+  const st = (k, label, v, cls, wide) => `<div class="stat ${wide ? 'wide' : ''}"><small>${label}</small><b class="num ${cls || ''}">${money(v)}</b></div>`;
+  const pStats = mets.filter(([k]) => !['open', 'inn', 'out', 'bal'].includes(k));
   return `<div class="topbar">${group ? `<button class="icon-btn" data-go="${book.prefix.replace(/-$/, '')}" aria-label="back">${ic('back')}</button>` : `<span class="logo">${ic('chart', 22).replace('currentColor', '#fff')}</span>`}<h1>${T('அறிக்கை', 'Report')}<span class="sub">${group ? esc(book.name) + ' · ' : ''}${esc(rangeTxt)}</span></h1></div>
     ${periodChips(ctx.ui.rPeriod, 'rep')}${ctx.ui.rPeriod === 'custom' ? customDates(ctx.ui.rCustom, 'rep') : ''}
-    <div class="chips mt4"><button class="chip ${!ids ? 'on' : ''}" data-act="racc" data-id="">${T('எல்லா கணக்கும்', 'All accounts')}</button>${book.accounts.map(a => `<button class="chip ${ids && ids[0] === a.id ? 'on' : ''}" data-act="racc" data-id="${esc(a.id)}">${esc(a.name)}</button>`).join('')}</div>
+    <button class="row card rounded mt8 pick-acc" data-act="racc-pick"><span class="ic">${ic('users')}</span><span class="tx"><b>${esc(pickLabel)}</b><small>${esc(pickSub)}</small></span><span class="pick-go">${ic('chev', 20)}</span></button>
     <div class="stats">
       <div class="stat"><small><i class="dot in"></i>${T('வரவு', 'Money in')}</small><b class="num in">${money(tot.inn)}</b></div>
       <div class="stat"><small><i class="dot out"></i>${T('செலவு', 'Money out')}</small><b class="num out">${money(tot.out)}</b></div>
       <div class="stat"><small>${T('வித்தியாசம் (வரவு − செலவு)', 'Difference (in − out)')}</small><b class="num ${tot.inn - tot.out < 0 ? 'out' : 'in'}">${money(tot.inn - tot.out)}</b></div>
       <div class="stat"><small>${T('முடிவு இருப்பு', 'Closing balance')}</small><b class="num">${money(tot.bal)}</b></div>
-      ${tot.gross || tot.comm || tot.settled ? `<div class="stat"><small>${T('லாபம்', 'Profit')}</small><b class="num in">${money(tot.gross)}</b></div>
-      ${tot.comm ? `<div class="stat"><small>${T('கொடுக்க வேண்டிய கமிஷன்', 'Commission payable')}</small><b class="num out">${money(tot.comm)}</b></div><div class="stat"><small>${T('நிகர லாபம்', 'Net profit')}</small><b class="num in">${money(tot.profit)}</b></div>` : ''}
-      ${tot.settled ? `<div class="stat"><small>${T('லாபத்திலிருந்து எடுத்தது', 'Taken from profit')}</small><b class="num amber">${money(tot.settled)}</b></div>` : ''}
-      <div class="stat ${(tot.comm ? 1 : 0) + (tot.settled ? 1 : 0) === 1 ? '' : 'wide'}"><small>${T('கையிருப்பு லாபம்', 'Profit in hand')}</small><b class="num ${tot.inHand < 0 ? 'out' : 'in'}">${money(tot.inHand)}</b></div>` : ''}
+      ${pStats.map(([k, label, cls], i) => st(k, label, tot[k], k === 'inHand' && tot.inHand < 0 ? 'out' : cls, i === pStats.length - 1 && pStats.length % 2)).join('')}
     </div>
     <div class="card chart">${chart(book, from, to, ids)}</div>
     <div class="row2 mt12"><button class="btn" data-act="pdf">${ic('pdf', 20)}PDF</button><button class="btn ghost" data-act="csv">${ic('excel', 20)}Excel</button></div>
-    <div class="section-h"><h2>${T('கணக்கு வாரியாக', 'By account')}</h2></div>
-    <div class="card clip"><table class="table num"><thead><tr><th>${T('கணக்கு', 'Account')}</th><th>${T('வரவு', 'In')}</th><th>${T('செலவு', 'Out')}</th>${anyP ? `<th>${T('லாபம்', 'Profit')}</th>` : ''}<th>${T('இருப்பு', 'Bal')}</th></tr></thead><tbody>
-      ${accs.map(({ a, t }) => `<tr class="click" data-go="${accRoute(book, a.id)}"><td>${esc(a.name)}</td><td class="in">${money(t.inn)}</td><td class="out">${money(t.out)}</td>${anyP ? `<td>${t.gross || t.settled ? money(t.inHand) : ''}</td>` : ''}<td>${money(t.bal)}</td></tr>`).join('') || `<tr><td colspan="5" class="muted">${T('கணக்கு இல்லை', 'No accounts')}</td></tr>`}
-    </tbody></table></div>`;
+    <div class="section-h"><h2>${T('கணக்கு வாரியாக', 'By account')}</h2><span class="muted">${accs.length}</span></div>
+    ${accs.map(({ a, t }) => `<div class="card ba"><button class="ba-h" data-go="${accRoute(book, a.id)}"><b>${esc(a.name)}</b><span class="num ${t.bal < 0 ? 'out' : ''}">${money(t.bal)}</span>${ic('chev', 18)}</button>
+      <div class="ba-g">${mets.filter(([k]) => k !== 'bal').map(([k, label, cls]) => cell(label, t[k], k === 'inHand' && t[k] < 0 ? 'out' : cls)).join('')}</div></div>`).join('') || `<div class="card pad16 muted">${T('கணக்கு இல்லை', 'No accounts')}</div>`}
+    ${accs.length > 1 ? `<div class="card ba ba-total"><div class="ba-h"><b>${T('மொத்தம் (கூட்டுத்தொகை)', 'Total (all of the above)')}</b><span class="num">${money(tot.bal)}</span></div>
+      <div class="ba-g">${mets.filter(([k]) => k !== 'bal').map(([k, label, cls]) => cell(label, tot[k], cls)).join('')}</div></div>` : ''}
+    <button class="btn block mt12" data-act="pdf">${ic('pdf', 20)}${T('இதை PDF ஆக எடு', 'Download this as PDF')}</button>`;
+}
+/* Account chooser for the report: full details per account, tick the ones you want. */
+function accPicker(ctx, book) {
+  const [from, to] = periodRange(ctx.ui.rPeriod, ctx.ui.rCustom);
+  const cur = new Set(repIds(ctx, book) || book.accounts.map(a => a.id));
+  const rows = book.accounts.map(a => { const t = accountTotals(book, a, from, to); const p = t.gIn || t.gOut || t.settled;
+    return `<label class="row rp-row" data-name="${esc(a.name.toLowerCase())}"><input type="checkbox" class="check24" data-rp="${esc(a.id)}" ${cur.has(a.id) ? 'checked' : ''}><span class="tx"><b>${esc(a.name)}</b>
+      <small><span class="in">+${moneyAbs(t.inn)}</span> · <span class="out">−${moneyAbs(t.out)}</span>${p ? ` · ${T('லாபம்', 'Profit')} ${money(t.inHand)}` : ''}</small></span><b class="num ${t.bal < 0 ? 'out' : ''}">${money(t.bal)}</b></label>`; }).join('');
+  openSheet(T('எந்தக் கணக்குகள்?', 'Which accounts?'), `
+    <div class="row2"><button class="btn ghost" data-e="rp-all">${ic('check', 18, 3)}${T('எல்லாம்', 'All')}</button><button class="btn ghost" data-e="rp-none">${ic('x', 18)}${T('ஒன்றும் வேண்டாம்', 'None')}</button></div>
+    ${book.accounts.length > 6 ? `<input class="input mt12" id="rp-q" type="search" placeholder="${T('கணக்கைத் தேடு', 'Search accounts')}">` : ''}
+    <div class="menu mt12 rp-list">${rows || `<p class="muted pad16">${T('கணக்கு இல்லை', 'No accounts')}</p>`}</div>`,
+    `<button class="btn block" id="rp-go">${ic('check', 20, 3)}<span id="rp-n"></span></button>`);
+  const boxes = () => [...document.querySelectorAll('#sheet-root [data-rp]')];
+  const count = () => { const n = boxes().filter(b => b.checked).length; $('#rp-n').textContent = n === book.accounts.length ? T('எல்லா கணக்கும் காட்டு', 'Show all accounts') : TP('{n} கணக்கு காட்டு', 'Show {n} accounts', { n }); $('#rp-go').disabled = !n; };
+  $('#sheet-root .rp-list').onchange = count; count();
+  $('#sheet-root [data-e=rp-all]').onclick = () => { boxes().forEach(b => { if (b.closest('.rp-row').style.display !== 'none') b.checked = true; }); count(); };
+  $('#sheet-root [data-e=rp-none]').onclick = () => { boxes().forEach(b => { b.checked = false; }); count(); };
+  const q = $('#rp-q'); if (q) q.oninput = () => { const v = q.value.trim().toLowerCase(); document.querySelectorAll('#sheet-root .rp-row').forEach(r => { r.style.display = !v || r.dataset.name.includes(v) ? '' : 'none'; }); };
+  $('#rp-go').onclick = () => { const sel = boxes().filter(b => b.checked).map(b => b.dataset.rp); ctx.ui.rSel = Object.assign({}, ctx.ui.rSel, { [book.id]: sel.length === book.accounts.length ? [] : sel }); closeSheet(); ctx.render(); };
 }
 function chart(book, from, to, ids) {
   const list = book.entries.filter(e => counts(e) && (!ids || ids.includes(e.acc)) && (!from || e.date >= from) && (!to || e.date <= to));
@@ -440,14 +484,14 @@ export function accountShareText(book, a) {
 /* PDF columns the user can tick on / off (remembered on this device). */
 const PDF_COLS = () => [
   ['open', T('தொடக்க இருப்பு', 'Opening balance')], ['inn', T('வரவு', 'Money in')], ['out', T('செலவு', 'Money out')],
-  ['gross', T('லாபம்', 'Profit')], ['comm', T('கொடுக்க வேண்டிய கமிஷன்', 'Commission payable')], ['net', T('நிகர லாபம்', 'Net profit')],
+  ['gIn', T('வரவு லாபம்', 'In profit')], ['gOut', T('செலவு லாபம்', 'Out profit')], ['cIn', T('வரவு கமிஷன்', 'In commission')], ['cOut', T('செலவு கமிஷன்', 'Out commission')], ['net', T('நிகர லாபம்', 'Net profit')],
   ['settled', T('லாபத்திலிருந்து எடுத்தது', 'Taken from profit')], ['inHand', T('கையிருப்பு லாபம்', 'Profit in hand')], ['bal', T('இருப்பு', 'Balance')],
   ['note', T('விவரம் / குறிப்பு', 'Details / note')]
 ];
 const pdfPrefs = () => { try { return JSON.parse(ls.get('tl4-pdf-cols', '{}')) || {}; } catch (e) { return {}; } };
 export function pdfOptions(ctx, book, accIds, from, to, title) {
   const per = book.accounts.filter(a => !accIds || accIds.includes(a.id)).map(a => accountTotals(book, a, from, to));
-  const has = { gross: per.some(t => t.gross), comm: per.some(t => t.comm), net: per.some(t => t.comm), settled: per.some(t => t.settled), inHand: per.some(t => t.gross || t.settled), note: accIds && accIds.length === 1 };
+  const has = { gIn: per.some(t => t.gIn), gOut: per.some(t => t.gOut), cIn: per.some(t => t.cIn), cOut: per.some(t => t.cOut), net: per.some(t => t.gross), settled: per.some(t => t.settled), inHand: per.some(t => t.gross || t.settled), note: accIds && accIds.length === 1 };
   const pref = pdfPrefs();
   const cols = PDF_COLS().filter(([k]) => has[k] !== false && (has[k] === undefined || has[k]));
   openSheet(T('PDF-ல் என்ன காட்ட வேண்டும்?', 'What should the PDF show?'), `<div class="menu">${cols.map(([k, label]) => `<label class="row"><span class="tx"><b>${label}</b></span><input type="checkbox" class="check24" data-col="${k}" ${pref[k] === false ? '' : 'checked'}></label>`).join('')}</div>
@@ -464,24 +508,28 @@ export function printReport(ctx, book, accIds, from, to, title, prefs) {
   const tot = allTotals(book, from, to, accIds);
   const range = from || to ? `${dmy(from) || '…'} → ${dmy(to) || '…'}` : T('எல்லா நாட்களும்', 'All time');
   const per = accs.map(a => ({ a, t: accountTotals(book, a, from, to) }));
-  const any = { gross: per.some(x => x.t.gross || x.t.settled), comm: per.some(x => x.t.comm), settled: per.some(x => x.t.settled) };
-  const C = { open: on('open'), inn: on('inn'), out: on('out'), gross: any.gross && on('gross'), comm: any.comm && on('comm'), net: any.comm && on('net'), settled: any.settled && on('settled'), inHand: any.gross && on('inHand'), bal: on('bal'), note: on('note') };
-  const L = { inn: T('வரவு', 'Money in'), out: T('செலவு', 'Money out'), bal: T('இருப்பு', 'Balance'), gross: T('லாபம்', 'Profit'), comm: T('கொடுக்க வேண்டிய கமிஷன்', 'Commission payable'), net: T('நிகர லாபம்', 'Net profit'), settled: T('லாபத்திலிருந்து எடுத்தது', 'Taken from profit'), inHand: T('கையிருப்பு லாபம்', 'Profit in hand') };
+  const any = k => per.some(x => x.t[k]), anyP = per.some(x => x.t.gross || x.t.settled);
+  const C = { open: on('open'), inn: on('inn'), out: on('out'), gIn: any('gIn') && on('gIn'), gOut: any('gOut') && on('gOut'), cIn: any('cIn') && on('cIn'), cOut: any('cOut') && on('cOut'), net: any('gross') && on('net'), settled: any('settled') && on('settled'), inHand: anyP && on('inHand'), bal: on('bal'), note: on('note') };
+  C.gross = C.gIn || C.gOut; C.comm = C.cIn || C.cOut;
+  const L = { inn: T('வரவு', 'Money in'), out: T('செலவு', 'Money out'), bal: T('இருப்பு', 'Balance'), gIn: T('வரவு லாபம்', 'In profit'), gOut: T('செலவு லாபம்', 'Out profit'), cIn: T('வரவு கமிஷன்', 'In commission'), cOut: T('செலவு கமிஷன்', 'Out commission'), net: T('நிகர லாபம்', 'Net profit'), settled: T('லாபத்திலிருந்து எடுத்தது', 'Taken from profit'), inHand: T('கையிருப்பு லாபம்', 'Profit in hand') };
   const box = (k, v, cls) => C[k] ? `<div><small>${L[k]}</small><b class="${cls || ''}">${money(v)}</b></div>` : '';
   const m0 = v => v ? money(v) : '';
+  // Boxed totals under the table: every figure the top boxes have, plus opening balance.
+  const endBoxes = (t, head) => `<div class="pr-end"><h3>${esc(head)}</h3><div class="pr-sum">${C.open ? `<div><small>${T('தொடக்க இருப்பு', 'Opening balance')}</small><b>${money(t.open)}</b></div>` : ''}${[['inn', t.inn, 'pr-in'], ['out', t.out, 'pr-out'], ['gIn', t.gIn], ['gOut', t.gOut], ['cIn', t.cIn, 'pr-out'], ['cOut', t.cOut, 'pr-out'], ['net', t.profit, 'pr-in'], ['settled', t.settled], ['inHand', t.inHand, 'pr-in'], ['bal', t.bal]].map(([k, v, c]) => box(k, v, c)).join('')}</div></div>`;
   let html = `<div class="pr-h"><div><h1>${esc(title)}</h1><p>${esc(range)}${book.kind === 'group' ? ' · ' + esc(book.name) : ''}</p></div><p>Team Ledger · ${new Date().toLocaleString(locale())}</p></div>
-    <div class="pr-sum">${box('inn', tot.inn, 'pr-in')}${box('out', tot.out, 'pr-out')}${box('gross', tot.gross)}${box('comm', tot.comm, 'pr-out')}${box('net', tot.profit, 'pr-in')}${box('settled', tot.settled)}${box('inHand', tot.inHand, 'pr-in')}${box('bal', tot.bal)}</div>`;
+    <div class="pr-sum">${box('inn', tot.inn, 'pr-in')}${box('out', tot.out, 'pr-out')}${box('gIn', tot.gIn)}${box('gOut', tot.gOut)}${box('cIn', tot.cIn, 'pr-out')}${box('cOut', tot.cOut, 'pr-out')}${box('net', tot.profit, 'pr-in')}${box('settled', tot.settled)}${box('inHand', tot.inHand, 'pr-in')}${box('bal', tot.bal)}</div>`;
   if (accs.length > 1) {
     // One-page summary: one row per account, sized to fit a single A4 sheet.
     const cols = [
       ['open', T('தொடக்கம்', 'Opening'), t => m0(t.open), ''], ['inn', T('வரவு', 'In'), t => m0(t.inn), 'pr-in'], ['out', T('செலவு', 'Out'), t => m0(t.out), 'pr-out'],
-      ['gross', T('லாபம்', 'Profit'), t => m0(t.gross), ''], ['comm', T('கமிஷன்', 'Commission'), t => m0(t.comm), 'pr-out'], ['net', L.net, t => t.gross || t.comm ? money(t.profit) : '', 'pr-in'],
+      ['gIn', L.gIn, t => m0(t.gIn), ''], ['gOut', L.gOut, t => m0(t.gOut), ''], ['cIn', L.cIn, t => m0(t.cIn), 'pr-out'], ['cOut', L.cOut, t => m0(t.cOut), 'pr-out'], ['net', L.net, t => t.gross ? money(t.profit) : '', 'pr-in'],
       ['settled', T('எடுத்தது', 'Taken'), t => m0(t.settled), ''], ['inHand', T('கையிருப்பு', 'In hand'), t => t.gross || t.settled ? money(t.inHand) : '', 'pr-in'], ['bal', T('இருப்பு', 'Balance'), t => `<b>${money(t.bal)}</b>`, '']
     ].filter(c => C[c[0]]);
-    const sum = { open: per.reduce((n, x) => n + x.t.open, 0), inn: tot.inn, out: tot.out, gross: tot.gross, comm: tot.comm, net: tot.profit, settled: tot.settled, inHand: tot.inHand, bal: tot.bal };
-    html += `<table class="pr-t"><thead><tr><th>#</th><th>${T('கணக்கு', 'Account')}</th>${cols.map(c => `<th class="r">${c[1]}</th>`).join('')}</tr></thead><tbody>
+    const sum = { open: tot.open, inn: tot.inn, out: tot.out, gIn: tot.gIn, gOut: tot.gOut, cIn: tot.cIn, cOut: tot.cOut, net: tot.profit, settled: tot.settled, inHand: tot.inHand, bal: tot.bal };
+    html += `<table class="pr-t ${cols.length > 7 ? 'pr-wide' : ''}"><thead><tr><th>#</th><th>${T('கணக்கு', 'Account')}</th>${cols.map(c => `<th class="r">${c[1]}</th>`).join('')}</tr></thead><tbody>
       ${per.map(({ a, t }, i) => `<tr><td>${i + 1}</td><td>${esc(a.name)}</td>${cols.map(c => `<td class="r ${c[3]}">${c[2](t)}</td>`).join('')}</tr>`).join('')}
       <tr class="pr-total"><td></td><td><b>${T('மொத்தம்', 'Total')}</b></td>${cols.map(c => `<td class="r ${c[3]}"><b>${money(sum[c[0]])}</b></td>`).join('')}</tr></tbody></table>`;
+    html += endBoxes(tot, TP('மொத்தம் · {n} கணக்குகள்', 'Total · {n} accounts', { n: accs.length }));
   } else {
     for (const { a, t } of per) {
       const cols = [
@@ -493,6 +541,7 @@ export function printReport(ctx, book, accIds, from, to, title, prefs) {
       <table class="pr-t"><thead><tr><th>${T('தேதி', 'Date')}</th>${C.note ? `<th>${T('விவரம்', 'Details')}</th>` : ''}${cols.map(c => `<th class="r">${c[1]}</th>`).join('')}</tr></thead><tbody>
       ${t.rows.map(({ e, bal }) => `<tr><td>${dmy(e.date)}${e.time && e.time !== '00:00' ? ' <small>' + niceTime(e.time) + '</small>' : ''}</td>${C.note ? `<td>${isSettle(e) ? esc(e.note || '') + ' <small>(' + L.settled + ')</small>' : esc([e.note, e.party, e.cat].filter(Boolean).join(' · ') || '—') + (!counts(e) ? ' <small>(' + (e.pending ? T('நிலுவை', 'pending') : T('இருப்பில் இல்லை', 'not in balance')) + ')</small>' : '')}</td>` : ''}${cols.map(c => `<td class="r ${c[3]}">${c[2](e, bal)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="8">${T('பதிவு இல்லை', 'No entries')}</td></tr>`}
       <tr class="pr-total"><td>${C.note ? '' : `<b>${T('மொத்தம்', 'Total')}</b>`}</td>${C.note ? `<td><b>${T('மொத்தம்', 'Total')}</b></td>` : ''}${cols.map(c => `<td class="r ${c[3]}"><b>${money(c[4])}</b></td>`).join('')}</tr></tbody></table>`;
+      html += endBoxes(t, T('மொத்தம்', 'Total') + ' · ' + a.name);
     }
   }
   html += `<p class="pr-f">Team Ledger ${VERSION}</p>`;
@@ -542,7 +591,7 @@ export const ledgerActions = {
   'search': ctx => { ctx.ui.searchOpen = true; ctx.ui.focusSearch = true; ctx.render(); },
   'search-close': ctx => { ctx.ui.searchOpen = false; ctx.ui.q = ''; ctx.render(); },
   'period': (ctx, b) => { if (b.dataset.for === 'acc') ctx.ui.period = b.dataset.k; else ctx.ui.rPeriod = b.dataset.k; ctx.render(); },
-  'racc': (ctx, b) => { ctx.ui.rAcc = b.dataset.id; ctx.render(); },
-  'pdf': ctx => { const book = ctx.book(); const [f, t] = periodRange(ctx.ui.rPeriod, ctx.ui.rCustom); const ids = ctx.ui.rAcc && book.account(ctx.ui.rAcc) ? [ctx.ui.rAcc] : null; pdfOptions(ctx, book, ids, f, t, ids ? book.account(ids[0]).name : (book.kind === 'group' ? book.name : T('எல்லா கணக்குகள்', 'All accounts'))); },
-  'csv': ctx => { const book = ctx.book(); const [f, t] = periodRange(ctx.ui.rPeriod, ctx.ui.rCustom); const ids = ctx.ui.rAcc && book.account(ctx.ui.rAcc) ? [ctx.ui.rAcc] : null; csvReport(book, ids, f, t); }
+  'racc-pick': ctx => accPicker(ctx, ctx.book()),
+  'pdf': ctx => { const book = ctx.book(); const [f, t] = periodRange(ctx.ui.rPeriod, ctx.ui.rCustom); const ids = repIds(ctx, book); pdfOptions(ctx, book, ids, f, t, ids ? ids.slice(0, 4).map(id => book.account(id).name).join(', ') + (ids.length > 4 ? ' +' + (ids.length - 4) : '') : (book.kind === 'group' ? book.name : T('எல்லா கணக்குகள்', 'All accounts'))); },
+  'csv': ctx => { const book = ctx.book(); const [f, t] = periodRange(ctx.ui.rPeriod, ctx.ui.rCustom); const ids = repIds(ctx, book); csvReport(book, ids, f, t); }
 };

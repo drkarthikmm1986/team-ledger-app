@@ -541,5 +541,16 @@ export default {
 "Delete and start again": "মুছে আবার শুরু করুন",
 "Not yet. Did you sign in on that phone with the new app?": "এখনো আসেনি। সেই ফোনে নতুন অ্যাপে সাইন ইন করেছেন?",
 "Delete the group?": "গ্রুপ মুছবেন?",
-"“{g}” and its records are removed for everyone, permanently.": "“{g}” ও এর রেকর্ড সবার জন্য স্থায়ীভাবে মুছে যাবে।"
+"“{g}” and its records are removed for everyone, permanently.": "“{g}” ও এর রেকর্ড সবার জন্য স্থায়ীভাবে মুছে যাবে।",
+"Total (all of the above)": "মোট (উপরের সব)",
+"Download this as PDF": "PDF হিসেবে ডাউনলোড করুন",
+"Which accounts?": "কোন অ্যাকাউন্ট?",
+"None": "কোনোটি নয়",
+"Search accounts": "অ্যাকাউন্ট খুঁজুন",
+"Show all accounts": "সব অ্যাকাউন্ট দেখান",
+"Show {n} accounts": "{n}টি অ্যাকাউন্ট দেখান",
+"All accounts ({n})": "সব অ্যাকাউন্ট ({n})",
+"{n} accounts": "{n}টি অ্যাকাউন্ট",
+"Tap to choose which accounts to show": "কোন অ্যাকাউন্ট দেখাবেন বাছতে ট্যাপ করুন",
+"Total · {n} accounts": "মোট · {n}টি অ্যাকাউন্ট"
 };

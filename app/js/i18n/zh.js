@@ -541,5 +541,16 @@ export default {
 "Delete and start again": "删除并重新开始",
 "Not yet. Did you sign in on that phone with the new app?": "还没有。您在那部手机上用新版应用登录了吗？",
 "Delete the group?": "删除群组？",
-"“{g}” and its records are removed for everyone, permanently.": "“{g}”及其记录将为所有人永久删除。"
+"“{g}” and its records are removed for everyone, permanently.": "“{g}”及其记录将为所有人永久删除。",
+"Total (all of the above)": "合计（以上全部）",
+"Download this as PDF": "下载为 PDF",
+"Which accounts?": "哪些账户？",
+"None": "全不选",
+"Search accounts": "搜索账户",
+"Show all accounts": "显示全部账户",
+"Show {n} accounts": "显示 {n} 个账户",
+"All accounts ({n})": "全部账户（{n}）",
+"{n} accounts": "{n} 个账户",
+"Tap to choose which accounts to show": "点按选择要显示的账户",
+"Total · {n} accounts": "合计 · {n} 个账户"
 };

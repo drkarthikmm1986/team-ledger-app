@@ -541,5 +541,16 @@ export default {
 "Delete and start again": "削除してやり直す",
 "Not yet. Did you sign in on that phone with the new app?": "まだです。その端末で新しいアプリにログインしましたか？",
 "Delete the group?": "グループを削除しますか？",
-"“{g}” and its records are removed for everyone, permanently.": "「{g}」とその記録は全員から完全に削除されます。"
+"“{g}” and its records are removed for everyone, permanently.": "「{g}」とその記録は全員から完全に削除されます。",
+"Total (all of the above)": "合計（上記すべて）",
+"Download this as PDF": "PDF でダウンロード",
+"Which accounts?": "どの口座？",
+"None": "なし",
+"Search accounts": "口座を検索",
+"Show all accounts": "すべての口座を表示",
+"Show {n} accounts": "{n} 件の口座を表示",
+"All accounts ({n})": "すべての口座（{n}）",
+"{n} accounts": "{n} 件の口座",
+"Tap to choose which accounts to show": "タップして表示する口座を選択",
+"Total · {n} accounts": "合計 · {n} 件の口座"
 };

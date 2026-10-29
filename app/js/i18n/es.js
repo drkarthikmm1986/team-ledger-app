@@ -541,5 +541,16 @@ export default {
 "Delete and start again": "Eliminar y empezar de nuevo",
 "Not yet. Did you sign in on that phone with the new app?": "Todavía no. ¿Iniciaste sesión en ese teléfono con la app nueva?",
 "Delete the group?": "¿Eliminar el grupo?",
-"“{g}” and its records are removed for everyone, permanently.": "“{g}” y sus registros se eliminarán para todos, para siempre."
+"“{g}” and its records are removed for everyone, permanently.": "“{g}” y sus registros se eliminarán para todos, para siempre.",
+"Total (all of the above)": "Total (todo lo anterior)",
+"Download this as PDF": "Descargar como PDF",
+"Which accounts?": "¿Qué cuentas?",
+"None": "Ninguna",
+"Search accounts": "Buscar cuentas",
+"Show all accounts": "Mostrar todas las cuentas",
+"Show {n} accounts": "Mostrar {n} cuentas",
+"All accounts ({n})": "Todas las cuentas ({n})",
+"{n} accounts": "{n} cuentas",
+"Tap to choose which accounts to show": "Toca para elegir qué cuentas mostrar",
+"Total · {n} accounts": "Total · {n} cuentas"
 };

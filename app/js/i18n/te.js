@@ -541,5 +541,16 @@ export default {
 "Delete and start again": "తొలగించి మళ్ళీ మొదలుపెట్టు",
 "Not yet. Did you sign in on that phone with the new app?": "ఇంకా రాలేదు. ఆ ఫోన్‌లో కొత్త యాప్‌లో సైన్ ఇన్ చేశారా?",
 "Delete the group?": "గ్రూప్ తొలగించాలా?",
-"“{g}” and its records are removed for everyone, permanently.": "“{g}”, దాని రికార్డులు అందరికీ శాశ్వతంగా తొలగిపోతాయి."
+"“{g}” and its records are removed for everyone, permanently.": "“{g}”, దాని రికార్డులు అందరికీ శాశ్వతంగా తొలగిపోతాయి.",
+"Total (all of the above)": "మొత్తం (పైవన్నీ)",
+"Download this as PDF": "PDF గా డౌన్‌లోడ్ చేయండి",
+"Which accounts?": "ఏ ఖాతాలు?",
+"None": "ఏదీ వద్దు",
+"Search accounts": "ఖాతాలను వెతకండి",
+"Show all accounts": "అన్ని ఖాతాలు చూపించు",
+"Show {n} accounts": "{n} ఖాతాలు చూపించు",
+"All accounts ({n})": "అన్ని ఖాతాలు ({n})",
+"{n} accounts": "{n} ఖాతాలు",
+"Tap to choose which accounts to show": "ఏ ఖాతాలు చూపాలో ఎంచుకోవడానికి తాకండి",
+"Total · {n} accounts": "మొత్తం · {n} ఖాతాలు"
 };

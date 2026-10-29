@@ -541,5 +541,16 @@ export default {
 "Delete and start again": "Удалить и начать заново",
 "Not yet. Did you sign in on that phone with the new app?": "Пока нет. Вы вошли на том телефоне в новое приложение?",
 "Delete the group?": "Удалить группу?",
-"“{g}” and its records are removed for everyone, permanently.": "«{g}» и её записи будут удалены у всех навсегда."
+"“{g}” and its records are removed for everyone, permanently.": "«{g}» и её записи будут удалены у всех навсегда.",
+"Total (all of the above)": "Итого (всё выше)",
+"Download this as PDF": "Скачать как PDF",
+"Which accounts?": "Какие счета?",
+"None": "Ничего",
+"Search accounts": "Поиск счетов",
+"Show all accounts": "Показать все счета",
+"Show {n} accounts": "Показать счета: {n}",
+"All accounts ({n})": "Все счета ({n})",
+"{n} accounts": "Счетов: {n}",
+"Tap to choose which accounts to show": "Нажмите, чтобы выбрать счета",
+"Total · {n} accounts": "Итого · счетов: {n}"
 };

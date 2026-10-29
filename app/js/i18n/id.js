@@ -541,5 +541,16 @@ export default {
 "Delete and start again": "Hapus dan mulai lagi",
 "Not yet. Did you sign in on that phone with the new app?": "Belum. Sudahkah Anda masuk di ponsel itu dengan aplikasi baru?",
 "Delete the group?": "Hapus grup?",
-"“{g}” and its records are removed for everyone, permanently.": "“{g}” dan catatannya akan dihapus permanen untuk semua orang."
+"“{g}” and its records are removed for everyone, permanently.": "“{g}” dan catatannya akan dihapus permanen untuk semua orang.",
+"Total (all of the above)": "Total (semua di atas)",
+"Download this as PDF": "Unduh sebagai PDF",
+"Which accounts?": "Akun yang mana?",
+"None": "Tidak ada",
+"Search accounts": "Cari akun",
+"Show all accounts": "Tampilkan semua akun",
+"Show {n} accounts": "Tampilkan {n} akun",
+"All accounts ({n})": "Semua akun ({n})",
+"{n} accounts": "{n} akun",
+"Tap to choose which accounts to show": "Ketuk untuk memilih akun yang ditampilkan",
+"Total · {n} accounts": "Total · {n} akun"
 };
